@@ -298,6 +298,7 @@ def _run_config_menu(config_path: str) -> int:
             if choice == "1":
                 print()
                 print(render_config_summary(payload))
+                _pause_menu()
                 continue
             if choice == "2":
                 line = int(input("Line number (1..4): ").strip())
@@ -383,6 +384,62 @@ def _prompt_device_selection(payload: dict[str, object], line: int) -> int:
     return int(devices[selected_index - 1]["device"])
 
 
+def _pause_menu() -> None:
+    input("Press Enter to continue...")
+
+
+def _get_line_device_info(
+    payload: dict[str, object],
+    line: int,
+    device_number: int,
+) -> dict[str, object]:
+    for item in get_line_devices(payload, line):
+        if int(item["device"]) == device_number:
+            return item
+    raise ValueError("device not found")
+
+
+def _channel_numbers_from_device_info(device_info: dict[str, object]) -> list[int]:
+    return sorted(int(row["channel"]) for row in device_info["channel_rows"])
+
+
+def _format_channel_list(channels: list[int]) -> str:
+    return ",".join(f"CH{channel}" for channel in channels)
+
+
+def _prompt_channel_checklist(current_channels: list[int]) -> list[int] | None:
+    selected = set(current_channels)
+    while True:
+        print()
+        print("Channel selection")
+        print("-----------------")
+        for channel in range(1, 9):
+            marker = "x" if channel in selected else " "
+            print(f"{channel}. [{marker}] CH{channel}")
+        print("s. Save")
+        print("q. Cancel")
+        choice = input("Toggle channel or select action: ").strip().lower()
+        if choice == "s":
+            if not selected:
+                print("At least one channel must remain enabled.")
+                continue
+            return sorted(selected)
+        if choice == "q":
+            return None
+        try:
+            channel = int(choice)
+        except ValueError:
+            print("Unknown command")
+            continue
+        if channel < 1 or channel > 8:
+            print("Channel must be in range 1..8")
+            continue
+        if channel in selected:
+            selected.remove(channel)
+        else:
+            selected.add(channel)
+
+
 def _run_line_submenu(config_path: str, line: int) -> None:
     while True:
         payload = load_config_document(config_path)
@@ -392,7 +449,7 @@ def _run_line_submenu(config_path: str, line: int) -> None:
         print(render_line_devices(payload, line))
         print()
         print("1. Show device details")
-        print("2. Change device channels")
+        print("2. Edit device channels")
         print("3. Remove device")
         print("4. Add TRM138 to this line")
         print("0. Back")
@@ -403,15 +460,22 @@ def _run_line_submenu(config_path: str, line: int) -> None:
                 selected_device = _prompt_device_selection(payload, line)
                 print()
                 print(render_device_details(payload, line=line, device=selected_device))
+                _pause_menu()
                 continue
             if choice == "2":
                 selected_device = _prompt_device_selection(payload, line)
-                channels = parse_channels(input("Channels [1-8]: ").strip() or "1-8")
+                device_info = _get_line_device_info(payload, line, selected_device)
+                current_channels = _channel_numbers_from_device_info(device_info)
+                print(f"Current channels: {_format_channel_list(current_channels)}")
+                target_channels = _prompt_channel_checklist(current_channels)
+                if target_channels is None:
+                    print("cancelled")
+                    continue
                 update_trm138_channels(
                     payload,
                     line=line,
                     device=selected_device,
-                    channels=channels,
+                    channels=target_channels,
                 )
             elif choice == "3":
                 selected_device = _prompt_device_selection(payload, line)

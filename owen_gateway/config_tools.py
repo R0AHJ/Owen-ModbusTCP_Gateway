@@ -115,14 +115,17 @@ def render_device_details(
         f"Base address: {selected['base_address']}",
         f"Tag: {selected['tag']}",
         "",
-        "| Channel | OVEN Address | Modbus Registers | Type |",
-        "|---|---:|---|---|",
+        "| Channel | OVEN Address | Value Register | Time Mark | Status | Type |",
+        "|---|---:|---|---:|---:|---|",
     ]
     for row in selected["channel_rows"]:
+        if row["value_start"] == row["value_end"]:
+            value_register = f"`{row['value_start']}`"
+        else:
+            value_register = f"`{row['value_start']},{row['value_end']}`"
         lines.append(
-            f"| `CH{row['channel']}` | `{row['address']}` | "
-            f"`HR{row['value_start']}..HR{row['value_end']}`, `HR{row['time_mark']}`, `HR{row['status']}` | "
-            f"`float32 + uint16 + uint16` |"
+            f"| `{row['channel']}` | `{row['address']}` | {value_register} | "
+            f"`{row['time_mark']}` | `{row['status']}` | `{row['value_type']}` |"
         )
     return "\n".join(lines)
 
@@ -193,7 +196,7 @@ def render_modbus_map(payload: dict[str, object], config_name: str) -> str:
         lines.extend(
             [
                 "| Device | SlaveID | Base Address | Tag | Channels |",
-                "|---:|---:|---:|---|---|",
+                "|------:|--------:|-------------:|-----|----------|",
             ]
         )
         for device in bus_devices:
@@ -206,16 +209,20 @@ def render_modbus_map(payload: dict[str, object], config_name: str) -> str:
                 "",
                 "Channel map for each device on this line:",
                 "",
-                "| Channel | OVEN Address | Value | Time Mark | Status |",
-                "|---|---:|---|---|---|",
+                "| Channel | OVEN Address | Value Register | Time Mark | Status | Type |",
+                "|--------:|-------------:|----------------|----------:|-------:|------|",
             ]
         )
         example = bus_devices[0]
         for channel in example["channel_rows"]:
+            if channel["value_start"] == channel["value_end"]:
+                value_register = f"`{channel['value_start']}`"
+            else:
+                value_register = f"`{channel['value_start']},{channel['value_end']}`"
             lines.append(
-                f"| `CH{channel['channel']}` | `{channel['address']}` | "
-                f"`HR{channel['value_start']}..HR{channel['value_end']}` | "
-                f"`HR{channel['time_mark']}` | `HR{channel['status']}` |"
+                f"| `{channel['channel']}` | `{channel['address']}` | "
+                f"{value_register} | `{channel['time_mark']}` | `{channel['status']}` | "
+                f"`{channel['value_type']}` |"
             )
         lines.extend(
             [
@@ -421,7 +428,11 @@ def update_trm138_channels(
         tag=tag,
     )
     current_points = grouped[matched_device]
-    base = min(int(point["address"]) for point in current_points)
+    base = min(
+        int(point["address"])
+        - (_channel_number_from_modbus_address(int(point["modbus_address"])) - 1)
+        for point in current_points
+    )
     tag_slug = _common_tag_prefix([str(point["name"]) for point in current_points])
     parameter = str(current_points[0].get("parameter", "rEAd"))
 
@@ -640,24 +651,29 @@ def _collect_devices(payload: dict[str, object]) -> dict[str, list[dict[str, obj
     for (bus_name, device_number), points in grouped.items():
         ordered_points = sorted(points, key=lambda point: point.address)
         first = ordered_points[0]
+        base_address = min(
+            point.address - (_channel_number_from_modbus_address(point.modbus_address) - 1)
+            for point in ordered_points
+        )
         devices[bus_name].append(
             {
                 "device": device_number,
                 "slave_id": first.modbus_slave_id,
-                "base_address": min(point.address for point in ordered_points),
+                "base_address": base_address,
                 "tag": _common_tag_prefix([point.name for point in ordered_points]),
                 "channels": ",".join(
-                    f"CH{point.address - min(p.address for p in ordered_points) + 1}"
+                    f"CH{_channel_number_from_modbus_address(point.modbus_address)}"
                     for point in ordered_points
                 ),
                 "channel_rows": [
                     {
-                        "channel": point.address - min(p.address for p in ordered_points) + 1,
+                        "channel": _channel_number_from_modbus_address(point.modbus_address),
                         "address": point.address,
                         "value_start": point.modbus_address,
                         "value_end": point.modbus_address + 1,
                         "time_mark": point.time_mark_address,
                         "status": point.channel_status_address,
+                        "value_type": point.modbus_data_type,
                     }
                     for point in ordered_points
                 ],
@@ -704,3 +720,7 @@ def _common_tag_prefix(names: list[str]) -> str:
     prefix = prefix.rstrip("_")
     prefix = re.sub(r"_ch$", "", prefix)
     return re.sub(r"_ch\d+$", "", prefix)
+
+
+def _channel_number_from_modbus_address(modbus_address: int) -> int:
+    return ((modbus_address - TRM138_REGISTER_BASE) // TRM138_REGISTERS_PER_CHANNEL) + 1

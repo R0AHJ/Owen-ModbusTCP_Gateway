@@ -190,8 +190,8 @@ class ConfigToolsTests(unittest.TestCase):
         details = render_device_details(payload, line=1, base_address=96)
 
         self.assertIn("SlaveID: 10", details)
-        self.assertIn("| `CH1` | `96` | `HR16..HR17`, `HR18`, `HR19` |", details)
-        self.assertIn("| `CH2` | `97` | `HR20..HR21`, `HR22`, `HR23` |", details)
+        self.assertIn("| `1` | `96` | `16,17` | `18` | `19` | `float32` |", details)
+        self.assertIn("| `2` | `97` | `20,21` | `22` | `23` | `float32` |", details)
 
     def test_get_line_devices_returns_device_inventory(self) -> None:
         payload = load_config_document("missing-test-config.json")
@@ -245,7 +245,7 @@ class ConfigToolsTests(unittest.TestCase):
         self.assertIn("Service `SlaveID`: `1`", content)
         self.assertIn("## line2", content)
         self.assertIn("| `1` | `50` | `48` | `line2_dev` | `CH1,CH2` |", content)
-        self.assertIn("| `CH1` | `48` | `HR16..HR17` | `HR18` | `HR19` |", content)
+        self.assertIn("| `1` | `48` | `16,17` | `18` | `19` | `float32` |", content)
 
     def test_export_config_document_writes_json_and_map(self) -> None:
         payload = load_config_document("missing-test-config.json")
@@ -371,6 +371,35 @@ class ConfigToolsTests(unittest.TestCase):
         config = load_config_from_payload(payload)
         slave_ids = {point.name: point.modbus_slave_id for point in config.points}
         self.assertEqual(slave_ids["dev96_ch8"], 10)
+
+    def test_summary_keeps_original_base_address_for_sparse_channels(self) -> None:
+        payload = load_config_document("missing-test-config.json")
+        set_line(
+            payload,
+            line=1,
+            port="COM6",
+            baudrate=9600,
+            bytesize=8,
+            parity="N",
+            stopbits=1,
+            timeout_ms=1000,
+            poll_interval_ms=1000,
+        )
+        add_trm138_device(
+            payload,
+            line=1,
+            base_address=96,
+            channels=[7],
+            tag="dev96",
+        )
+
+        summary = render_config_summary(payload)
+        details = render_device_details(payload, line=1, base_address=96)
+
+        self.assertIn("base_address=96", summary)
+        self.assertIn("channels=CH7", summary)
+        self.assertIn("Base address: 96", details)
+        self.assertIn("| `7` | `102` | `40,41` | `42` | `43` | `float32` |", details)
 
 
 def load_config_from_payload(payload: dict[str, object]):
