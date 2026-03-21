@@ -1,0 +1,49 @@
+{
+  "buses": [
+    {
+      "name": "bus1",
+      "serial": {
+        "port": "COM6",
+        "baudrate": 9600,
+        "bytesize": 8,
+        "parity": "N",
+        "stopbits": 1,
+        "timeout_ms": 1000
+      },
+      "poll_interval_ms": 1000
+    }
+  ],
+  "diagnostics": true,
+  "modbus": {
+    "host": "127.0.0.1",
+    "port": 15020
+  },
+  "status": {
+    "enabled": true,
+    "register_type": "holding_register",
+    "modbus_address": 1,
+    "modbus_data_type": "uint16"
+  },
+  "telemetry": {
+    "enabled": true,
+    "register_type": "holding_register",
+    "last_error_code_address": 2,
+    "success_counter_address": 3,
+    "timeout_counter_address": 4,
+    "protocol_error_counter_address": 5,
+    "poll_cycle_counter_address": 6
+  },
+  "points": [
+    {
+      "name": "device96_read",
+      "bus": "bus1",
+      "device": 1,
+      "address": 96,
+      "parameter": "rEAd",
+      "protocol_format": "float32",
+      "register_type": "holding_register",
+      "modbus_address": 16,
+      "modbus_data_type": "float32"
+    }
+  ]
+}

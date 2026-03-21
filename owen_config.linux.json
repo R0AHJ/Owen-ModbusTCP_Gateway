@@ -1,0 +1,126 @@
+{
+  "buses": [
+    {
+      "name": "bus1",
+      "serial": {
+        "port": "/dev/ttyUSB0",
+        "baudrate": 9600,
+        "bytesize": 8,
+        "parity": "N",
+        "stopbits": 1,
+        "timeout_ms": 200
+      },
+      "poll_interval_ms": 500
+    }
+  ],
+  "diagnostics": false,
+  "modbus": {
+    "host": "0.0.0.0",
+    "port": 15020
+  },
+  "status": {
+    "enabled": true,
+    "register_type": "holding_register",
+    "modbus_address": 1,
+    "modbus_data_type": "uint16"
+  },
+  "telemetry": {
+    "enabled": true,
+    "register_type": "holding_register",
+    "last_error_code_address": 2,
+    "success_counter_address": 3,
+    "timeout_counter_address": 4,
+    "protocol_error_counter_address": 5,
+    "poll_cycle_counter_address": 6
+  },
+  "points": [
+    {
+      "name": "trm138_ch1",
+      "bus": "bus1",
+      "device": 1,
+      "address": 96,
+      "parameter": "rEAd",
+      "protocol_format": "float32",
+      "register_type": "holding_register",
+      "modbus_address": 16,
+      "modbus_data_type": "float32"
+    },
+    {
+      "name": "trm138_ch2",
+      "bus": "bus1",
+      "device": 1,
+      "address": 97,
+      "parameter": "rEAd",
+      "protocol_format": "float32",
+      "register_type": "holding_register",
+      "modbus_address": 18,
+      "modbus_data_type": "float32"
+    },
+    {
+      "name": "trm138_ch3",
+      "bus": "bus1",
+      "device": 1,
+      "address": 98,
+      "parameter": "rEAd",
+      "protocol_format": "float32",
+      "register_type": "holding_register",
+      "modbus_address": 20,
+      "modbus_data_type": "float32"
+    },
+    {
+      "name": "trm138_ch4",
+      "bus": "bus1",
+      "device": 1,
+      "address": 99,
+      "parameter": "rEAd",
+      "protocol_format": "float32",
+      "register_type": "holding_register",
+      "modbus_address": 22,
+      "modbus_data_type": "float32"
+    },
+    {
+      "name": "trm138_ch5",
+      "bus": "bus1",
+      "device": 1,
+      "address": 100,
+      "parameter": "rEAd",
+      "protocol_format": "float32",
+      "register_type": "holding_register",
+      "modbus_address": 24,
+      "modbus_data_type": "float32"
+    },
+    {
+      "name": "trm138_ch6",
+      "bus": "bus1",
+      "device": 1,
+      "address": 101,
+      "parameter": "rEAd",
+      "protocol_format": "float32",
+      "register_type": "holding_register",
+      "modbus_address": 26,
+      "modbus_data_type": "float32"
+    },
+    {
+      "name": "trm138_ch7",
+      "bus": "bus1",
+      "device": 1,
+      "address": 102,
+      "parameter": "rEAd",
+      "protocol_format": "float32",
+      "register_type": "holding_register",
+      "modbus_address": 28,
+      "modbus_data_type": "float32"
+    },
+    {
+      "name": "trm138_ch8",
+      "bus": "bus1",
+      "device": 1,
+      "address": 103,
+      "parameter": "rEAd",
+      "protocol_format": "float32",
+      "register_type": "holding_register",
+      "modbus_address": 30,
+      "modbus_data_type": "float32"
+    }
+  ]
+}

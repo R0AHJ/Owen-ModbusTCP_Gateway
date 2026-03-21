@@ -1,0 +1,235 @@
+import json
+import os
+import tempfile
+import unittest
+
+from owen_gateway.config import load_config
+
+
+def _base_config() -> dict[str, object]:
+    return {
+        "serial": {
+            "port": "COM6",
+            "baudrate": 9600,
+            "bytesize": 8,
+            "parity": "N",
+            "stopbits": 1,
+            "timeout_ms": 1000,
+            "address_bits": 8,
+        },
+        "poll_interval_ms": 1000,
+        "modbus": {
+            "host": "127.0.0.1",
+            "port": 15020,
+        },
+        "status": {
+            "enabled": True,
+            "register_type": "holding_register",
+            "modbus_address": 1,
+            "modbus_data_type": "uint16",
+        },
+        "telemetry": {
+            "enabled": True,
+            "register_type": "holding_register",
+            "last_error_code_address": 2,
+            "success_counter_address": 3,
+            "timeout_counter_address": 4,
+            "protocol_error_counter_address": 5,
+            "poll_cycle_counter_address": 6,
+        },
+        "health": {
+            "stale_after_cycles": 3,
+            "fault_after_failures": 10,
+            "recovery_poll_interval_cycles": 5,
+        },
+    }
+
+
+class ConfigTests(unittest.TestCase):
+    def _load(self, payload: dict[str, object]):
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as handle:
+            json.dump(payload, handle)
+            temp_path = handle.name
+        try:
+            return load_config(temp_path)
+        finally:
+            os.unlink(temp_path)
+
+    def test_modbus_slave_id_defaults_to_bus_base_plus_device_index(self) -> None:
+        payload = _base_config()
+        payload["points"] = [
+            {
+                "name": "ch1",
+                "device": 3,
+                "address": 96,
+                "parameter": "rEAd",
+                "protocol_format": "float32",
+                "register_type": "holding_register",
+                "modbus_address": 16,
+                "modbus_data_type": "float32",
+                "time_mark_address": 18,
+                "channel_status_address": 19,
+            }
+        ]
+
+        config = self._load(payload)
+
+        self.assertEqual(config.points[0].modbus_slave_id, 12)
+
+    def test_same_register_map_is_allowed_on_different_slave_ids(self) -> None:
+        payload = _base_config()
+        payload["points"] = [
+            {
+                "name": "dev1_ch1",
+                "device": 1,
+                "modbus_slave_id": 10,
+                "address": 96,
+                "parameter": "rEAd",
+                "protocol_format": "float32",
+                "register_type": "holding_register",
+                "modbus_address": 16,
+                "modbus_data_type": "float32",
+                "time_mark_address": 18,
+                "channel_status_address": 19,
+            },
+            {
+                "name": "dev2_ch1",
+                "device": 2,
+                "modbus_slave_id": 11,
+                "address": 196,
+                "parameter": "rEAd",
+                "protocol_format": "float32",
+                "register_type": "holding_register",
+                "modbus_address": 16,
+                "modbus_data_type": "float32",
+                "time_mark_address": 18,
+                "channel_status_address": 19,
+            },
+        ]
+
+        config = self._load(payload)
+
+        self.assertEqual([point.modbus_slave_id for point in config.points], [10, 11])
+
+    def test_modbus_slave_id_uses_bus_base_for_second_line(self) -> None:
+        payload = _base_config()
+        payload.pop("serial")
+        payload.pop("poll_interval_ms")
+        payload["buses"] = [
+            {
+                "name": "line1",
+                "serial": {
+                    "port": "COM5",
+                    "baudrate": 9600,
+                    "bytesize": 8,
+                    "parity": "N",
+                    "stopbits": 1,
+                    "timeout_ms": 1000,
+                    "address_bits": 8,
+                },
+                "poll_interval_ms": 1000,
+                "modbus_slave_base": 10,
+            },
+            {
+                "name": "line2",
+                "serial": {
+                    "port": "COM6",
+                    "baudrate": 2400,
+                    "bytesize": 8,
+                    "parity": "E",
+                    "stopbits": 1,
+                    "timeout_ms": 1200,
+                    "address_bits": 8,
+                },
+                "poll_interval_ms": 1500,
+                "modbus_slave_base": 50,
+            },
+        ]
+        payload["points"] = [
+            {
+                "name": "line1_ch1",
+                "bus": "line1",
+                "device": 1,
+                "address": 48,
+                "parameter": "rEAd",
+                "protocol_format": "float32",
+                "register_type": "holding_register",
+                "modbus_address": 16,
+                "modbus_data_type": "float32",
+            },
+            {
+                "name": "line1_ch2",
+                "bus": "line1",
+                "device": 1,
+                "address": 49,
+                "parameter": "rEAd",
+                "protocol_format": "float32",
+                "register_type": "holding_register",
+                "modbus_address": 20,
+                "modbus_data_type": "float32",
+            },
+            {
+                "name": "line2_ch1",
+                "bus": "line2",
+                "device": 1,
+                "address": 48,
+                "parameter": "rEAd",
+                "protocol_format": "float32",
+                "register_type": "holding_register",
+                "modbus_address": 16,
+                "modbus_data_type": "float32",
+            },
+            {
+                "name": "line2_ch2",
+                "bus": "line2",
+                "device": 1,
+                "address": 49,
+                "parameter": "rEAd",
+                "protocol_format": "float32",
+                "register_type": "holding_register",
+                "modbus_address": 20,
+                "modbus_data_type": "float32",
+            },
+        ]
+
+        config = self._load(payload)
+
+        slave_ids = {point.name: point.modbus_slave_id for point in config.points}
+        self.assertEqual(slave_ids["line1_ch1"], 10)
+        self.assertEqual(slave_ids["line1_ch2"], 10)
+        self.assertEqual(slave_ids["line2_ch1"], 50)
+        self.assertEqual(slave_ids["line2_ch2"], 50)
+
+    def test_duplicate_modbus_slave_id_for_different_devices_is_rejected(self) -> None:
+        payload = _base_config()
+        payload["points"] = [
+            {
+                "name": "dev1_ch1",
+                "device": 1,
+                "modbus_slave_id": 10,
+                "address": 96,
+                "parameter": "rEAd",
+                "protocol_format": "float32",
+                "register_type": "holding_register",
+                "modbus_address": 16,
+                "modbus_data_type": "float32",
+            },
+            {
+                "name": "dev2_ch1",
+                "device": 2,
+                "modbus_slave_id": 10,
+                "address": 196,
+                "parameter": "rEAd",
+                "protocol_format": "float32",
+                "register_type": "holding_register",
+                "modbus_address": 16,
+                "modbus_data_type": "float32",
+            },
+        ]
+
+        with self.assertRaisesRegex(ValueError, "duplicate modbus_slave_id 10"):
+            self._load(payload)
+
+
+if __name__ == "__main__":
+    unittest.main()
