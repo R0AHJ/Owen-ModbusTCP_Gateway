@@ -2,6 +2,7 @@ import json
 import os
 import tempfile
 import unittest
+from pathlib import Path
 
 from owen_gateway.config import load_config
 
@@ -229,6 +230,25 @@ class ConfigTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "duplicate modbus_slave_id 10"):
             self._load(payload)
+
+    def test_linux_example_config_loads(self) -> None:
+        config = load_config(Path("owen_config.linux.json"))
+
+        self.assertEqual(config.buses[0].serial.port, "/dev/ttyUSB0")
+        self.assertEqual(config.modbus.port, 15020)
+        self.assertEqual(config.points[0].modbus_slave_id, 10)
+        self.assertEqual(config.points[0].time_mark_address, 18)
+
+    def test_linux_multiline_example_config_loads(self) -> None:
+        config = load_config(Path("owen_config.linux.multiline.json"))
+
+        self.assertEqual(len(config.buses), 2)
+        self.assertEqual(config.buses[0].serial.port, "/dev/ttyUSB0")
+        self.assertEqual(config.buses[1].serial.port, "/dev/ttyUSB1")
+        self.assertEqual(config.points[0].modbus_slave_id, 10)
+        self.assertEqual(config.points[2].modbus_slave_id, 11)
+        self.assertEqual(config.points[4].modbus_slave_id, 50)
+        self.assertEqual(config.points[6].modbus_slave_id, 51)
 
 
 if __name__ == "__main__":

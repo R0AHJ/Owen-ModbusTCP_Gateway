@@ -194,3 +194,84 @@ Run tests:
 - install from `requirements.txt`
 - adjust only the serial port name if needed
 - start with the probe first
+
+## Session 2026-03-22
+
+Stopped on config tooling and menu UX, not on gateway protocol/runtime logic.
+
+Implemented:
+
+- new config utility module:
+  - `owen_gateway/config_tools.py`
+- CLI config commands in:
+  - `owen_gateway/cli.py`
+- helper doc:
+  - `CONFIG_UTILS.md`
+- test coverage for config tools and CLI:
+  - `tests/test_config_tools.py`
+  - `tests/test_cli.py`
+
+Available config features now:
+
+- create/update line settings
+- add `TRM138`
+- remove `TRM138`
+- remove line
+- list whole config
+- list devices on selected line
+- show one selected device
+- export config into another JSON
+- auto-generate `<config>.modbus_map.md`
+
+Interactive menu status:
+
+- main menu exists
+- line submenu exists
+- device details now show:
+  - `SlaveID`
+  - base address
+  - tag
+  - one channel per row
+  - raw register numbers without `HR`
+- channel editing in line submenu now uses a checkbox-like list:
+  - `[x]` enabled
+  - `[ ]` disabled
+  - number toggles channel
+  - `s` saves
+  - `q` cancels
+
+Important bug fixed:
+
+- sparse channel sets were displayed incorrectly before
+- now if only `CH7` is enabled for device base `96`, summary still shows:
+  - `base_address=96`
+  - `channels=CH7`
+- device details and generated `.modbus_map.md` use the same simplified channel/register format
+
+Commits created in this session:
+
+- `9e1d4fe` `Add interactive config tools for TRM138 gateway`
+- `759b378` `Improve interactive config menu UX`
+
+Push status:
+
+- CLI `git push` still fails with `Repository not found` for the private GitHub repo
+- push from PyCharm UI worked before and should be used again
+
+Important working tree note before next session:
+
+- do not blindly commit the current working config:
+  - `owen_config.com6.two_trm138.addr48_96.json`
+- it is currently in an edited experimental state
+- untracked/generated companion file also exists:
+  - `owen_config.com6.two_trm138.addr48_96.modbus_map.md`
+- before committing configs, first decide whether to:
+  - restore the known-good 2-line runtime config
+  - or intentionally keep the reduced experimental one-line sparse-channel version
+
+Suggested next steps later:
+
+- push latest local commit from PyCharm
+- restore or rebuild the real working 2-line config
+- optionally improve line submenu further
+- optionally clean and unify generated map/document formatting everywhere
