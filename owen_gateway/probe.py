@@ -9,11 +9,13 @@ from pathlib import Path
 
 from owen_gateway.protocol import decode_payload, hash_parameter_name
 from owen_gateway.serial_client import OwenSerialClient
+from owen_gateway.trm138_parameters import get_trm138_parameter_spec
 
 
 VALID_PROTOCOL_FORMATS = {
     "float32",
     "int16",
+    "stored_dot",
     "uint16",
     "uint32",
     "raw",
@@ -36,6 +38,7 @@ class ProbeRequestConfig:
     address: int
     parameter: str
     protocol_format: str
+    parameter_index: int | None = None
 
 
 @dataclass(slots=True)
@@ -83,6 +86,8 @@ def validate_probe_config(config: ProbeConfig) -> None:
             f"unsupported request.protocol_format: {request.protocol_format}"
         )
     hash_parameter_name(request.parameter)
+    if request.parameter_index is not None and not (0 <= request.parameter_index <= 0xFFFF):
+        raise ValueError("request.parameter_index must be in range 0..65535")
 
     if config.retries < 0:
         raise ValueError("retries must be >= 0")
@@ -115,7 +120,7 @@ def run_probe(config: ProbeConfig) -> int:
 
     client.connect()
     logger.info(
-        "probe started: port=%s %s,%s%s%s address=%s parameter=%s retries=%s",
+        "probe started: port=%s %s,%s%s%s address=%s parameter=%s index=%s retries=%s",
         config.serial.port,
         config.serial.baudrate,
         config.serial.bytesize,
@@ -123,6 +128,7 @@ def run_probe(config: ProbeConfig) -> int:
         config.serial.stopbits,
         config.request.address,
         config.request.parameter,
+        config.request.parameter_index,
         config.retries,
     )
     try:
@@ -131,14 +137,20 @@ def run_probe(config: ProbeConfig) -> int:
             attempt_success = False
             for attempt in range(config.retries + 1):
                 try:
-                    request, response, frame = client.exchange(
-                        config.request.address,
-                        config.request.parameter,
-                    )
-                    value = decode_payload(
-                        frame.payload,
-                        config.request.protocol_format,
-                    )
+                    if config.request.protocol_format == "stored_dot":
+                        request = b""
+                        response = b""
+                        value = _read_stored_dot_probe_value(client, config.request)
+                    else:
+                        request, response, frame = client.exchange(
+                            config.request.address,
+                            config.request.parameter,
+                            config.request.parameter_index,
+                        )
+                        value = decode_payload(
+                            frame.payload,
+                            config.request.protocol_format,
+                        )
                     success_count += 1
                     attempt_success = True
                     logger.info(
@@ -152,20 +164,22 @@ def run_probe(config: ProbeConfig) -> int:
                 except TimeoutError:
                     timeout_count += 1
                     logger.warning(
-                        "timeout: attempt=%s/%s address=%s parameter=%s",
+                        "timeout: attempt=%s/%s address=%s parameter=%s index=%s",
                         attempt + 1,
                         config.retries + 1,
                         config.request.address,
                         config.request.parameter,
+                        config.request.parameter_index,
                     )
                 except Exception:
                     protocol_error_count += 1
                     logger.exception(
-                        "probe failed: attempt=%s/%s address=%s parameter=%s",
+                        "probe failed: attempt=%s/%s address=%s parameter=%s index=%s",
                         attempt + 1,
                         config.retries + 1,
                         config.request.address,
                         config.request.parameter,
+                        config.request.parameter_index,
                     )
 
                 if attempt < config.retries and config.inter_request_delay_ms > 0:
@@ -202,6 +216,38 @@ def main() -> int:
         return run_probe(config)
     except KeyboardInterrupt:
         return 130
+
+
+def _read_stored_dot_probe_value(
+    client: OwenSerialClient,
+    request: ProbeRequestConfig,
+) -> float:
+    spec = get_trm138_parameter_spec(request.parameter)
+    if spec is None or spec.fixed_point_layout is None:
+        raise RuntimeError(f"stored_dot layout is not defined for {request.parameter}")
+    if request.parameter_index is None:
+        raise RuntimeError("parameter_index is required for stored_dot probe requests")
+
+    layout = spec.fixed_point_layout
+    offset = layout.register_stride * request.parameter_index
+    registers = client.read_modbus_holding_registers(
+        request.address,
+        layout.dot_register_base + offset,
+        2,
+    )
+    return _decode_fixed_point(
+        registers[0],
+        registers[1],
+        signed=layout.signed_value,
+    )
+
+
+def _decode_fixed_point(dot_position: int, raw_value: int, *, signed: bool) -> float:
+    if signed and raw_value >= 0x8000:
+        raw_value -= 0x10000
+    if not (0 <= dot_position <= 3):
+        raise ValueError(f"unsupported decimal point position: {dot_position}")
+    return raw_value / (10**dot_position)
 
 
 if __name__ == "__main__":

@@ -93,6 +93,7 @@ class ModbusPublisher:
         telemetry: TelemetryConfig,
         points: list[PointConfig],
         extra_slave_ids: list[int] | None = None,
+        extra_holding_registers: list[int] | None = None,
     ) -> None:
         self.modbus = modbus
         self.status = status
@@ -100,6 +101,7 @@ class ModbusPublisher:
         self.points = points
         self._server_task: asyncio.Task[None] | None = None
         self._store = None
+        self._extra_holding_registers = extra_holding_registers or []
         self._slave_ids = sorted(
             {point.modbus_slave_id for point in points}.union(extra_slave_ids or [])
         )
@@ -123,6 +125,7 @@ class ModbusPublisher:
             self.status,
             self.telemetry,
             {"holding_register", "input_register"},
+            self._extra_holding_registers,
         )
         contexts = {
             slave_id: ModbusSlaveContext(
@@ -255,6 +258,7 @@ def _calc_size(
     status: StatusConfig,
     telemetry: TelemetryConfig,
     register_types: set[str],
+    extra_registers: list[int] | None = None,
 ) -> int:
     max_index = 1
     for point in points:
@@ -277,4 +281,6 @@ def _calc_size(
             telemetry.protocol_error_counter_address + 2,
             telemetry.poll_cycle_counter_address + 2,
         )
+    for address in extra_registers or []:
+        max_index = max(max_index, address + 2)
     return max_index

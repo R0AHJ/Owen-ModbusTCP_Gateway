@@ -38,13 +38,19 @@ class OwenSerialClient:
             self._serial.close()
             self._serial = None
 
-    def exchange(self, address: int, parameter_name: str) -> tuple[bytes, bytes, OwenFrame]:
+    def exchange(
+        self,
+        address: int,
+        parameter_name: str,
+        parameter_index: int | None = None,
+    ) -> tuple[bytes, bytes, OwenFrame]:
         if self._serial is None:
             raise RuntimeError("serial client is not connected")
 
         request = build_read_frame(
             expand_network_address(address, self.config.address_bits),
             parameter_name,
+            parameter_index,
         )
         self._serial.reset_input_buffer()
         self._serial.write(request)
@@ -56,6 +62,94 @@ class OwenSerialClient:
             )
         return request, response, decode_frame(response)
 
-    def read_parameter(self, address: int, parameter_name: str) -> OwenFrame:
-        _request, _response, frame = self.exchange(address, parameter_name)
+    def read_parameter(
+        self,
+        address: int,
+        parameter_name: str,
+        parameter_index: int | None = None,
+    ) -> OwenFrame:
+        _request, _response, frame = self.exchange(
+            address,
+            parameter_name,
+            parameter_index,
+        )
         return frame
+
+    def read_modbus_holding_registers(
+        self,
+        unit_id: int,
+        register_address: int,
+        register_count: int,
+    ) -> list[int]:
+        if self._serial is None:
+            raise RuntimeError("serial client is not connected")
+        if not (1 <= unit_id <= 247):
+            raise ValueError(f"invalid Modbus unit id: {unit_id}")
+        if not (0 <= register_address <= 0xFFFF):
+            raise ValueError(f"invalid Modbus register address: {register_address}")
+        if not (1 <= register_count <= 125):
+            raise ValueError(f"invalid Modbus register count: {register_count}")
+
+        request_wo_crc = bytes(
+            [
+                unit_id,
+                0x03,
+                (register_address >> 8) & 0xFF,
+                register_address & 0xFF,
+                (register_count >> 8) & 0xFF,
+                register_count & 0xFF,
+            ]
+        )
+        request = request_wo_crc + _modbus_crc(request_wo_crc).to_bytes(2, "little")
+        expected_length = 5 + register_count * 2
+
+        self._serial.reset_input_buffer()
+        self._serial.write(request)
+        self._serial.flush()
+        response = self._serial.read(expected_length)
+        if not response:
+            raise TimeoutError(
+                f"no Modbus response from unit={unit_id} register={register_address} count={register_count}"
+            )
+        if len(response) < 5:
+            raise RuntimeError(f"short Modbus response: {response.hex(' ')}")
+
+        response_wo_crc = response[:-2]
+        received_crc = int.from_bytes(response[-2:], "little")
+        calculated_crc = _modbus_crc(response_wo_crc)
+        if received_crc != calculated_crc:
+            raise RuntimeError(
+                f"Modbus CRC mismatch: received=0x{received_crc:04X} expected=0x{calculated_crc:04X}"
+            )
+        if response[0] != unit_id:
+            raise RuntimeError(
+                f"unexpected Modbus unit id: {response[0]} != {unit_id}"
+            )
+        if response[1] & 0x80:
+            if len(response) < 5:
+                raise RuntimeError(f"short Modbus exception response: {response.hex(' ')}")
+            raise RuntimeError(f"Modbus exception code: {response[2]}")
+        if response[1] != 0x03:
+            raise RuntimeError(f"unexpected Modbus function: {response[1]}")
+        byte_count = response[2]
+        if byte_count != register_count * 2:
+            raise RuntimeError(
+                f"unexpected Modbus byte count: {byte_count} != {register_count * 2}"
+            )
+        data = response[3:-2]
+        return [
+            int.from_bytes(data[index : index + 2], "big")
+            for index in range(0, len(data), 2)
+        ]
+
+
+def _modbus_crc(data: bytes) -> int:
+    crc = 0xFFFF
+    for byte in data:
+        crc ^= byte
+        for _ in range(8):
+            if crc & 0x0001:
+                crc = (crc >> 1) ^ 0xA001
+            else:
+                crc >>= 1
+    return crc & 0xFFFF

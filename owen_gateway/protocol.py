@@ -18,12 +18,21 @@ class OwenFrame:
     payload: bytes = b""
 
 
-def build_read_frame(address: int, parameter_name: str) -> bytes:
+def build_read_frame(
+    address: int,
+    parameter_name: str,
+    parameter_index: int | None = None,
+) -> bytes:
+    payload = b""
+    if parameter_index is not None:
+        if not 0 <= parameter_index <= 0xFFFF:
+            raise ValueError(f"parameter_index out of range: {parameter_index}")
+        payload = parameter_index.to_bytes(2, "big")
     frame = OwenFrame(
         address=address,
         request=True,
         parameter_hash=hash_parameter_name(parameter_name),
-        payload=b"",
+        payload=payload,
     )
     return encode_frame(frame)
 
@@ -88,20 +97,46 @@ def decode_payload(payload: bytes, protocol_format: str) -> object:
         if len(payload) == 4:
             return struct.unpack(">f", payload)[0]
         if len(payload) == 6:
-            # Some operational parameters append 2 bytes of relative time.
+            # Indexed values and operational values with a time mark both append 2 bytes.
             return struct.unpack(">f", payload[:4])[0]
         raise ValueError(f"float32 payload must be 4 or 6 bytes, got {len(payload)}")
     if protocol_format == "int16":
+        if len(payload) == 1:
+            value = payload[0]
+            if value >= 0x80:
+                value -= 0x100
+            return value
         if len(payload) != 2:
-            raise ValueError(f"int16 payload must be 2 bytes, got {len(payload)}")
+            if len(payload) == 4:
+                return struct.unpack(">h", payload[:2])[0]
+            raise ValueError(f"int16 payload must be 2 or 4 bytes, got {len(payload)}")
         return struct.unpack(">h", payload)[0]
+    if protocol_format == "stored_dot":
+        if len(payload) == 3:
+            sign = -1 if (payload[0] & 0x80) else 1
+            exponent = (payload[0] >> 4) & 0x07
+            mantissa = int.from_bytes(payload[1:], "big")
+            return sign * (mantissa / (10**exponent))
+        if len(payload) not in {1, 2}:
+            raise ValueError(f"stored_dot payload must be 1, 2 or 3 bytes, got {len(payload)}")
+        raw = int.from_bytes(payload.rjust(2, b"\x00"), "big")
+        sign = -1 if (raw & 0x8000) else 1
+        exponent = (raw >> 12) & 0x07
+        mantissa = raw & 0x0FFF
+        return sign * (mantissa / (10**exponent))
     if protocol_format == "uint16":
+        if len(payload) == 1:
+            return payload[0]
         if len(payload) != 2:
-            raise ValueError(f"uint16 payload must be 2 bytes, got {len(payload)}")
+            if len(payload) == 4:
+                return struct.unpack(">H", payload[:2])[0]
+            raise ValueError(f"uint16 payload must be 2 or 4 bytes, got {len(payload)}")
         return struct.unpack(">H", payload)[0]
     if protocol_format == "uint32":
         if len(payload) != 4:
-            raise ValueError(f"uint32 payload must be 4 bytes, got {len(payload)}")
+            if len(payload) == 6:
+                return struct.unpack(">I", payload[:4])[0]
+            raise ValueError(f"uint32 payload must be 4 or 6 bytes, got {len(payload)}")
         return struct.unpack(">I", payload)[0]
     if protocol_format == "raw":
         return payload

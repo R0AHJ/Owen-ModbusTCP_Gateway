@@ -50,7 +50,6 @@
     "poll_cycle_counter_address": 6
   },
   "health": {
-    "stale_after_cycles": 3,
     "fault_after_failures": 10,
     "recovery_poll_interval_cycles": 5
   },
@@ -108,10 +107,10 @@
       "channel_status_address": 23
     },
     {
-      "name": "line2_dev48_ch1",
+      "name": "line2_dev144_ch1",
       "bus": "line2",
       "device": 1,
-      "address": 48,
+      "address": 144,
       "parameter": "rEAd",
       "protocol_format": "float32",
       "register_type": "holding_register",
@@ -121,10 +120,10 @@
       "channel_status_address": 19
     },
     {
-      "name": "line2_dev48_ch2",
+      "name": "line2_dev144_ch2",
       "bus": "line2",
       "device": 1,
-      "address": 49,
+      "address": 145,
       "parameter": "rEAd",
       "protocol_format": "float32",
       "register_type": "holding_register",
@@ -134,10 +133,10 @@
       "channel_status_address": 23
     },
     {
-      "name": "line2_dev96_ch1",
+      "name": "line2_dev192_ch1",
       "bus": "line2",
       "device": 2,
-      "address": 96,
+      "address": 192,
       "parameter": "rEAd",
       "protocol_format": "float32",
       "register_type": "holding_register",
@@ -147,10 +146,10 @@
       "channel_status_address": 19
     },
     {
-      "name": "line2_dev96_ch2",
+      "name": "line2_dev192_ch2",
       "bus": "line2",
       "device": 2,
-      "address": 97,
+      "address": 193,
       "parameter": "rEAd",
       "protocol_format": "float32",
       "register_type": "holding_register",

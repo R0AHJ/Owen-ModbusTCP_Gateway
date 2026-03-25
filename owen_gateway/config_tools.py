@@ -19,7 +19,11 @@ from owen_gateway.config import (
 
 TRM138_CHANNEL_COUNT = 8
 TRM138_REGISTER_BASE = 16
-TRM138_REGISTERS_PER_CHANNEL = 4
+TRM138_VALUE_REGISTERS_PER_CHANNEL = 2
+TRM138_TIME_MARK_BASE = TRM138_REGISTER_BASE + (
+    TRM138_CHANNEL_COUNT * TRM138_VALUE_REGISTERS_PER_CHANNEL
+)
+TRM138_STATUS_BASE = TRM138_TIME_MARK_BASE + TRM138_CHANNEL_COUNT
 
 
 def load_config_document(path: str | Path) -> dict[str, object]:
@@ -227,14 +231,19 @@ def render_modbus_map(payload: dict[str, object], config_name: str) -> str:
         lines.extend(
             [
                 "",
+                "Logic unit result masks:",
+                "",
+                "| Register | Meaning |",
+                "|---|---|",
+                "| `HR48` | LU state mask, bit0..bit7 -> LU1..LU8 |",
+                "",
                 "Channel status codes:",
                 "",
                 "- `0` disabled / no data / empty payload",
                 "- `1` ok",
-                "- `2` stale",
-                "- `3` temporary communication error",
-                "- `4` protocol error",
-                "- `5` failed, reduced polling",
+                "- `2` temporary communication error",
+                "- `3` protocol error",
+                "- `4` failed, reduced polling",
                 "",
             ]
         )
@@ -574,21 +583,20 @@ def _append_trm138_points(
     parameter: str,
 ) -> None:
     for channel in channels:
-        channel_offset = channel - 1
-        modbus_address = TRM138_REGISTER_BASE + channel_offset * TRM138_REGISTERS_PER_CHANNEL
+        modbus_address = _value_register_start(channel)
         points.append(
             {
                 "name": f"{tag_slug}_ch{channel}",
                 "bus": bus_name,
                 "device": device,
-                "address": base_address + channel_offset,
+                "address": base_address + channel - 1,
                 "parameter": parameter,
                 "protocol_format": "float32",
                 "register_type": "holding_register",
                 "modbus_address": modbus_address,
                 "modbus_data_type": "float32",
-                "time_mark_address": modbus_address + 2,
-                "channel_status_address": modbus_address + 3,
+                "time_mark_address": _time_mark_register(channel),
+                "channel_status_address": _status_register(channel),
             }
         )
 
@@ -723,4 +731,18 @@ def _common_tag_prefix(names: list[str]) -> str:
 
 
 def _channel_number_from_modbus_address(modbus_address: int) -> int:
-    return ((modbus_address - TRM138_REGISTER_BASE) // TRM138_REGISTERS_PER_CHANNEL) + 1
+    return (
+        (modbus_address - TRM138_REGISTER_BASE) // TRM138_VALUE_REGISTERS_PER_CHANNEL
+    ) + 1
+
+
+def _value_register_start(channel: int) -> int:
+    return TRM138_REGISTER_BASE + (channel - 1) * TRM138_VALUE_REGISTERS_PER_CHANNEL
+
+
+def _time_mark_register(channel: int) -> int:
+    return TRM138_TIME_MARK_BASE + channel - 1
+
+
+def _status_register(channel: int) -> int:
+    return TRM138_STATUS_BASE + channel - 1

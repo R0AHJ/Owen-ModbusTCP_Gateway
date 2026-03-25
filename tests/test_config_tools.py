@@ -66,9 +66,9 @@ class ConfigToolsTests(unittest.TestCase):
         self.assertEqual(len(points), 3)
         self.assertEqual(points[0]["name"], "trm138_main_ch1")
         self.assertEqual(points[0]["modbus_address"], 16)
-        self.assertEqual(points[1]["modbus_address"], 20)
+        self.assertEqual(points[1]["modbus_address"], 18)
         self.assertEqual(points[2]["address"], 103)
-        self.assertEqual(points[2]["modbus_address"], 44)
+        self.assertEqual(points[2]["modbus_address"], 30)
 
     def test_add_trm138_device_uses_next_free_device_number(self) -> None:
         payload = load_config_document("missing-test-config.json")
@@ -102,8 +102,8 @@ class ConfigToolsTests(unittest.TestCase):
         self.assertEqual(result["device"], 2)
         config = load_config_from_payload(payload)
         slave_ids = {point.name: point.modbus_slave_id for point in config.points}
-        self.assertEqual(slave_ids["dev96_ch1"], 10)
-        self.assertEqual(slave_ids["dev48_ch1"], 11)
+        self.assertEqual(slave_ids["dev96_ch1"], 96)
+        self.assertEqual(slave_ids["dev48_ch1"], 48)
 
     def test_add_trm138_device_rejects_address_overlap(self) -> None:
         payload = load_config_document("missing-test-config.json")
@@ -163,7 +163,7 @@ class ConfigToolsTests(unittest.TestCase):
 
         self.assertIn("Modbus TCP: 0.0.0.0:15020", summary)
         self.assertIn("line1: COM6 9600 8N1", summary)
-        self.assertIn("device 1 -> SlaveID 10", summary)
+        self.assertIn("device 1 -> SlaveID 96", summary)
         self.assertIn("tag=main_trm", summary)
 
     def test_render_device_details_includes_slave_id_and_registers(self) -> None:
@@ -189,9 +189,9 @@ class ConfigToolsTests(unittest.TestCase):
 
         details = render_device_details(payload, line=1, base_address=96)
 
-        self.assertIn("SlaveID: 10", details)
-        self.assertIn("| `1` | `96` | `16,17` | `18` | `19` | `float32` |", details)
-        self.assertIn("| `2` | `97` | `20,21` | `22` | `23` | `float32` |", details)
+        self.assertIn("SlaveID: 96", details)
+        self.assertIn("| `1` | `96` | `16,17` | `32` | `40` | `float32` |", details)
+        self.assertIn("| `2` | `97` | `18,19` | `33` | `41` | `float32` |", details)
 
     def test_get_line_devices_returns_device_inventory(self) -> None:
         payload = load_config_document("missing-test-config.json")
@@ -211,7 +211,7 @@ class ConfigToolsTests(unittest.TestCase):
         devices = get_line_devices(payload, 2)
 
         self.assertEqual(len(devices), 1)
-        self.assertEqual(devices[0]["slave_id"], 50)
+        self.assertEqual(devices[0]["slave_id"], 48)
         self.assertEqual(devices[0]["base_address"], 48)
 
     def test_write_generated_modbus_map_creates_markdown_file(self) -> None:
@@ -244,8 +244,9 @@ class ConfigToolsTests(unittest.TestCase):
         self.assertIn("# Generated Modbus Map: owen_config.json", content)
         self.assertIn("Service `SlaveID`: `1`", content)
         self.assertIn("## line2", content)
-        self.assertIn("| `1` | `50` | `48` | `line2_dev` | `CH1,CH2` |", content)
-        self.assertIn("| `1` | `48` | `16,17` | `18` | `19` | `float32` |", content)
+        self.assertIn("| `1` | `48` | `48` | `line2_dev` | `CH1,CH2` |", content)
+        self.assertIn("| `1` | `48` | `16,17` | `32` | `40` | `float32` |", content)
+        self.assertIn("| `HR48` | LU state mask, bit0..bit7 -> LU1..LU8 |", content)
 
     def test_export_config_document_writes_json_and_map(self) -> None:
         payload = load_config_document("missing-test-config.json")
@@ -370,7 +371,7 @@ class ConfigToolsTests(unittest.TestCase):
         self.assertIn("dev96_ch8", point_names)
         config = load_config_from_payload(payload)
         slave_ids = {point.name: point.modbus_slave_id for point in config.points}
-        self.assertEqual(slave_ids["dev96_ch8"], 10)
+        self.assertEqual(slave_ids["dev96_ch8"], 96)
 
     def test_summary_keeps_original_base_address_for_sparse_channels(self) -> None:
         payload = load_config_document("missing-test-config.json")
@@ -399,7 +400,7 @@ class ConfigToolsTests(unittest.TestCase):
         self.assertIn("base_address=96", summary)
         self.assertIn("channels=CH7", summary)
         self.assertIn("Base address: 96", details)
-        self.assertIn("| `7` | `102` | `40,41` | `42` | `43` | `float32` |", details)
+        self.assertIn("| `7` | `102` | `28,29` | `38` | `46` | `float32` |", details)
 
 
 def load_config_from_payload(payload: dict[str, object]):

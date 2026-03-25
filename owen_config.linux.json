@@ -43,7 +43,9 @@
       "protocol_format": "float32",
       "register_type": "holding_register",
       "modbus_address": 16,
-      "modbus_data_type": "float32"
+      "modbus_data_type": "float32",
+      "time_mark_address": 32,
+      "channel_status_address": 40
     },
     {
       "name": "trm138_ch2",
@@ -54,7 +56,9 @@
       "protocol_format": "float32",
       "register_type": "holding_register",
       "modbus_address": 18,
-      "modbus_data_type": "float32"
+      "modbus_data_type": "float32",
+      "time_mark_address": 33,
+      "channel_status_address": 41
     },
     {
       "name": "trm138_ch3",
@@ -65,7 +69,9 @@
       "protocol_format": "float32",
       "register_type": "holding_register",
       "modbus_address": 20,
-      "modbus_data_type": "float32"
+      "modbus_data_type": "float32",
+      "time_mark_address": 34,
+      "channel_status_address": 42
     },
     {
       "name": "trm138_ch4",
@@ -76,7 +82,9 @@
       "protocol_format": "float32",
       "register_type": "holding_register",
       "modbus_address": 22,
-      "modbus_data_type": "float32"
+      "modbus_data_type": "float32",
+      "time_mark_address": 35,
+      "channel_status_address": 43
     },
     {
       "name": "trm138_ch5",
@@ -87,7 +95,9 @@
       "protocol_format": "float32",
       "register_type": "holding_register",
       "modbus_address": 24,
-      "modbus_data_type": "float32"
+      "modbus_data_type": "float32",
+      "time_mark_address": 36,
+      "channel_status_address": 44
     },
     {
       "name": "trm138_ch6",
@@ -98,7 +108,9 @@
       "protocol_format": "float32",
       "register_type": "holding_register",
       "modbus_address": 26,
-      "modbus_data_type": "float32"
+      "modbus_data_type": "float32",
+      "time_mark_address": 37,
+      "channel_status_address": 45
     },
     {
       "name": "trm138_ch7",
@@ -109,7 +121,9 @@
       "protocol_format": "float32",
       "register_type": "holding_register",
       "modbus_address": 28,
-      "modbus_data_type": "float32"
+      "modbus_data_type": "float32",
+      "time_mark_address": 38,
+      "channel_status_address": 46
     },
     {
       "name": "trm138_ch8",
@@ -120,7 +134,9 @@
       "protocol_format": "float32",
       "register_type": "holding_register",
       "modbus_address": 30,
-      "modbus_data_type": "float32"
+      "modbus_data_type": "float32",
+      "time_mark_address": 39,
+      "channel_status_address": 47
     }
   ]
 }

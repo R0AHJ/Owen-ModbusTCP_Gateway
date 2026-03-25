@@ -1,167 +1,133 @@
 # Industrial Gateway Templates
 
-## OВЕН RS-485 -> Modbus-TCP
+## OVEN RS-485 -> Modbus TCP
 
-Каркас для приборов вроде `ТРМ138`, работающих по протоколу ОВЕН поверх `RS-485`.
+Gateway for OVEN devices such as `TRM138`.
 
-Что реализовано:
+The gateway communicates with field devices only through the OVEN protocol on
+`RS-485` and publishes data to clients through `Modbus TCP`.
 
-- кодирование и декодирование кадров протокола ОВЕН;
-- расчет `Hash` имени параметра и `CRC` по официальной спецификации;
-- опрос параметров приборов по одной или нескольким шинам `RS-485`;
-- публикация значений в `Modbus-TCP`;
-- диагностический лог обмена;
-- статус связи и служебная телеметрия в `Modbus`;
-- публикация `time mark` и статуса канала для `rEAd`.
+## What Is Implemented
 
-Пример конфига: `owen_config.example.json`
+- OVEN frame encode/decode
+- parameter hash and CRC calculation
+- polling over one or multiple `RS-485` buses
+- `Modbus TCP` publication
+- service status and telemetry registers
+- `rEAd` value publication with `time mark`
+- `TRM138` parameter decoding for `C.SP`, `HYSt`, `AL.t`
+- logical unit state mask in `HR48`
 
-Готовые шаблоны:
+## Runtime Model
 
-- Один `ТРМ138` на `COM6`: `owen_config.single_trm138.com6.json`
-- Windows: `owen_config.windows.json`
-- Linux: `owen_config.linux.json`
-- Карта на 16 приборов / 2 шины: `MODBUS_MAP_2BUS_16DEV.md`
-- Рабочая инструкция: `OWEN_GATEWAY_GUIDE_RU.md`
+- service registers are published in `SlaveID 1`
+- device `SlaveID` equals the device base OVEN address
+- `TRM138` is read only through the OVEN protocol
+- `time mark` is published but does not affect channel status
 
-Запуск:
+## Service Registers
 
-```bash
-python -m owen_gateway --config owen_config.json
-```
+- `HR1` gateway status
+- `HR2` last error code
+- `HR3` success counter
+- `HR4` timeout counter
+- `HR5` protocol error counter
+- `HR6` poll cycle counter
+- `HR10..HR13` per-line status
 
-Сейчас поддержаны форматы ответа ОВЕН:
+Gateway status codes:
 
-- `float32`
-- `int16`
-- `uint16`
-- `uint32`
-- `raw`
+- `1` ok
+- `2` degraded
+- `3` offline
+- `4` protocol error
 
-Для `ТРМ138` типичный сценарий - читать оперативный параметр `rEAd` по адресам каналов и отдавать его в единое пространство `holding registers` `Modbus-TCP`.
+Last error codes:
 
-Файл `owen_config.single_trm138.com6.json` собран как готовый вариант для одного прибора на одном порту.
+- `0` none
+- `1` timeout
+- `2` bad flag
+- `3` hash mismatch
+- `4` decode error
+- `5` io error
 
-### Один прибор
+## TRM138 Device Map
 
-Для одного `ТРМ138` можно не использовать массив `buses`.
+For each device:
 
-Используйте верхнеуровневые поля:
+- values: `HR16..HR31`
+- time marks: `HR32..HR39`
+- channel statuses: `HR40..HR47`
+- LU mask: `HR48`
 
-- `serial`
-- `poll_interval_ms`
-- `points`
+Channel status codes:
 
-В конфиге для одного прибора имеет смысл сразу резервировать на каждый канал:
+- `0` disabled / no data / empty payload
+- `1` ok
+- `2` temporary communication error
+- `3` protocol error
+- `4` failed, reduced polling
 
-- `2 HR` под значение `float32`
-- `1 HR` под `time mark`
-- `1 HR` под статус канала
+`HR48` contains one bitmask:
 
-Коды статуса канала:
+- `bit0..bit7 -> LU1..LU8`
 
-- `0` - нет данных / пустой payload / канал отключен
-- `1` - канал в норме
-- `2` - метка не меняется дольше допустимого окна
-- `3` - временные ошибки связи
-- `4` - протокольная ошибка
-- `5` - отказ, канал опрашивается реже
+## TRM138 Parameters
 
-Политика контроля задается секцией `health`:
+Supported OVEN parameters:
 
-- `stale_after_cycles` - сколько циклов подряд допускается одинаковая метка
-- `fault_after_failures` - сколько подряд сбоев до перевода канала в `failed`
-- `recovery_poll_interval_cycles` - как редко проверять канал в состоянии `failed`
+- `rEAd` -> `float32`
+- `C.SP` -> `stored_dot`
+- `HYSt` -> `uint16`
+- `AL.t` -> `uint16`
 
-### Несколько приборов и портов
+Important:
 
-Используйте массив `buses`. Каждая шина имеет имя, параметры порта и свой `poll_interval_ms`.
+- `C.SP`, `HYSt`, `AL.t` are read by channel address, like `rEAd`
+- `C.SP` uses OVEN `stored_dot` encoding
+- both `2`-byte and `3`-byte `stored_dot` payloads are supported
 
-Каждая точка в `points` содержит поле `bus`, которое указывает, с какого порта её читать.
-Поле `device` задает номер прибора на шине.
+Examples confirmed on hardware:
 
-Если у вас несколько `ТРМ138` на одной шине, просто добавляйте точки с нужными адресами ОВЕН.
-Если часть приборов подключена к другому порту, добавьте второй `bus`, например `bus2`, и привяжите к нему соответствующие точки.
+- `00 4b` -> `75.0`
+- `13 e8` -> `100.0`
+- `2b c2` -> `30.1`
+- `20 24 ea` -> `94.5`
 
-Ограничения текущей схемы:
+## Logical Unit Mask
 
-- до `4` шин
-- до `8` приборов на шину
-- до `32` приборов всего
+The gateway calculates `HR48` from:
 
-Для практической эксплуатации можно использовать фиксированную карту на `2` шины и `16` приборов:
+- measured channel value `rEAd`
+- setpoint `C.SP`
+- hysteresis `HYSt`
+- output characteristic `AL.t`
 
-- `bus1`: `device1..device8`
-- `bus2`: `device1..device8`
-- отдельный блок `16 HR` на каждый прибор
+Supported `AL.t` modes:
 
-### Диагностика
+- `1` direct hysteresis
+- `2` reverse hysteresis
+- `3` inside band
+- `4` outside band
 
-Поле `diagnostics` включает логирование сырых запросов и ответов по `RS-485`.
+## Config Notes
 
-### Статус связи
+Health section:
 
-Поле `status` задает отдельный `Modbus`-регистр состояния.
+- `fault_after_failures`
+- `recovery_poll_interval_cycles`
 
-Коды состояния:
+Legacy `stale_after_cycles` is ignored if present in an old config.
 
-- `1` - связь в норме
-- `2` - частичная деградация, часть точек не читается
-- `3` - прибор не отвечает
-- `4` - прибор отвечает, но есть протокольная ошибка
+Ready examples:
 
-### Служебные регистры
+- [owen_config.single_trm138.com6.json](/D:/Python_Project/owen_config.single_trm138.com6.json)
+- [owen_config.example.json](/D:/Python_Project/owen_config.example.json)
+- [owen_config.com6.two_trm138.addr48_96.json](/D:/Python_Project/owen_config.com6.two_trm138.addr48_96.json)
+- [owen_config.linux.json](/D:/Python_Project/owen_config.linux.json)
+- [owen_config.windows.json](/D:/Python_Project/owen_config.windows.json)
 
-Поле `telemetry` задает дополнительные `Modbus`-регистры.
-
-Типовая карта:
-
-- `HR1` - статус связи
-- `HR2` - `last_error_code`
-- `HR3` - `success_counter`
-- `HR4` - `timeout_counter`
-- `HR5` - `protocol_error_counter`
-- `HR6` - `poll_cycle_counter`
-
-Служебные регистры вынесены в диапазон `HR1..HR6`, чтобы не смешивать их с данными прибора.
-
-Карта измерений по умолчанию:
-
-- `HR16..HR17` - канал 1 (`float32`)
-- `HR18` - `time mark` канала 1
-- `HR19` - статус канала 1
-- `HR20..HR21` - канал 2 (`float32`)
-- `HR22` - `time mark` канала 2
-- `HR23` - статус канала 2
-- `HR24..HR25` - канал 3 (`float32`)
-- `HR26` - `time mark` канала 3
-- `HR27` - статус канала 3
-- `HR28..HR29` - канал 4 (`float32`)
-- `HR30` - `time mark` канала 4
-- `HR31` - статус канала 4
-- `HR32..HR33` - канал 5 (`float32`)
-- `HR34` - `time mark` канала 5
-- `HR35` - статус канала 5
-- `HR36..HR37` - канал 6 (`float32`)
-- `HR38` - `time mark` канала 6
-- `HR39` - статус канала 6
-- `HR40..HR41` - канал 7 (`float32`)
-- `HR42` - `time mark` канала 7
-- `HR43` - статус канала 7
-- `HR44..HR45` - канал 8 (`float32`)
-- `HR46` - `time mark` канала 8
-- `HR47` - статус канала 8
-
-Коды `last_error_code`:
-
-- `0` - ошибок нет
-- `1` - timeout
-- `2` - в ответе установлен request-flag
-- `3` - hash параметра в ответе не совпал
-- `4` - ошибка декодирования ответа
-- `5` - ошибка ввода-вывода или прочая внутренняя ошибка
-
-## Установка
+## Install
 
 ```bash
 python -m venv .venv
@@ -169,25 +135,25 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-На Windows активация окружения:
+Windows:
 
 ```powershell
 .venv\Scripts\Activate.ps1
 ```
 
-## Запуск
+## Run
 
 ```bash
 python -m owen_gateway --config owen_config.json
 ```
 
-Для проверки одного прибора без `Modbus`:
+Probe:
 
 ```bash
 python -m owen_gateway.probe --config owen_probe.com6.json --log-level INFO
 ```
 
-## Тесты
+Tests:
 
 ```bash
 python -m unittest discover -s tests
