@@ -47,6 +47,8 @@ class OwenSerialClient:
         if self._serial is None:
             raise RuntimeError("serial client is not connected")
 
+        # OVEN devices are polled with their native ASCII-nibble protocol even
+        # though the gateway publishes the results further upstream as Modbus TCP.
         request = build_read_frame(
             expand_network_address(address, self.config.address_bits),
             parameter_name,
@@ -90,6 +92,8 @@ class OwenSerialClient:
         if not (1 <= register_count <= 125):
             raise ValueError(f"invalid Modbus register count: {register_count}")
 
+        # This helper is only for diagnostics when the field device itself may
+        # speak Modbus RTU. Normal gateway runtime does not use this path.
         request_wo_crc = bytes(
             [
                 unit_id,

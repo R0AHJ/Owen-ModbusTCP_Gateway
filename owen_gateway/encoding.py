@@ -4,6 +4,9 @@ import struct
 
 
 def encode_registers(value: object, data_type: str) -> list[int]:
+    # The gateway keeps all published values in a canonical Modbus form:
+    # a sequence of 16-bit big-endian registers. This is the single place
+    # where Python values are converted into that wire representation.
     if data_type == "bool":
         return [1 if bool(value) else 0]
     if data_type == "uint16":
@@ -32,6 +35,8 @@ def encode_registers(value: object, data_type: str) -> list[int]:
 
 
 def register_width(data_type: str) -> int:
+    # Width is used by config validation and datastore sizing, so it must stay
+    # consistent with the packing rules in encode_registers().
     if data_type in {"bool", "uint16", "int16"}:
         return 1
     if data_type in {"uint32", "int32", "float32"}:
@@ -40,4 +45,6 @@ def register_width(data_type: str) -> int:
 
 
 def _split_words(data: bytes) -> list[int]:
+    # 32-bit values are published as two consecutive Modbus holding registers
+    # in network byte order, matching the layout used throughout the gateway.
     return [int.from_bytes(data[0:2], "big"), int.from_bytes(data[2:4], "big")]
