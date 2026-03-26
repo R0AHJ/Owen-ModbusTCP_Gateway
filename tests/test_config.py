@@ -199,26 +199,25 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(slave_ids["line2_ch1"], 48)
         self.assertEqual(slave_ids["line2_ch2"], 48)
 
-    def test_explicit_modbus_slave_id_must_match_device_base_address(self) -> None:
+    def test_explicit_modbus_slave_id_is_preserved_for_sparse_channels(self) -> None:
         payload = _base_config()
         payload["points"] = [
             {
                 "name": "dev1_ch1",
                 "device": 1,
-                "modbus_slave_id": 10,
-                "address": 96,
+                "modbus_slave_id": 96,
+                "address": 102,
                 "parameter": "rEAd",
                 "protocol_format": "float32",
                 "register_type": "holding_register",
-                "modbus_address": 16,
+                "modbus_address": 28,
                 "modbus_data_type": "float32",
             }
         ]
 
-        with self.assertRaisesRegex(
-            ValueError, "modbus_slave_id must equal device base address"
-        ):
-            self._load(payload)
+        config = self._load(payload)
+
+        self.assertEqual(config.points[0].modbus_slave_id, 96)
 
     def test_parameter_index_is_loaded_and_validated(self) -> None:
         payload = _base_config()
@@ -239,6 +238,37 @@ class ConfigTests(unittest.TestCase):
         config = self._load(payload)
 
         self.assertEqual(config.points[0].parameter_index, 0)
+
+    def test_internal_point_can_be_excluded_from_modbus_publication(self) -> None:
+        payload = _base_config()
+        payload["points"] = [
+            {
+                "name": "dev1_ch1",
+                "device": 1,
+                "address": 96,
+                "parameter": "rEAd",
+                "protocol_format": "float32",
+                "register_type": "holding_register",
+                "modbus_address": 16,
+                "modbus_data_type": "float32",
+                "channel_status_address": 40,
+            },
+            {
+                "name": "dev1_ch1_al_t_internal",
+                "device": 1,
+                "address": 96,
+                "parameter": "AL.t",
+                "protocol_format": "uint16",
+                "register_type": "holding_register",
+                "modbus_address": 0,
+                "modbus_data_type": "uint16",
+                "publish_to_modbus": False,
+            },
+        ]
+
+        config = self._load(payload)
+
+        self.assertFalse(config.points[1].publish_to_modbus)
 
     def test_legacy_stale_after_cycles_is_ignored(self) -> None:
         payload = _base_config()

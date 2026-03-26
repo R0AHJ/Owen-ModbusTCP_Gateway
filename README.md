@@ -33,7 +33,8 @@ The gateway communicates with field devices only through the OVEN protocol on
 - `HR4` timeout counter
 - `HR5` protocol error counter
 - `HR6` poll cycle counter
-- `HR10..HR13` per-line status
+- `HR10` line 1 status
+- `HR11` line 2 status
 
 Gateway status codes:
 
@@ -55,10 +56,11 @@ Last error codes:
 
 For each device:
 
-- values: `HR16..HR31`
-- time marks: `HR32..HR39`
+- `rEAd`: `HR16..HR31`
 - channel statuses: `HR40..HR47`
 - LU mask: `HR48`
+- `C.SP`: `HR56..HR71`
+- `HYSt`: `HR58..HR73`
 
 Channel status codes:
 
@@ -78,7 +80,7 @@ Supported OVEN parameters:
 
 - `rEAd` -> `float32`
 - `C.SP` -> `stored_dot`
-- `HYSt` -> `uint16`
+- `HYSt` -> `stored_dot`
 - `AL.t` -> `uint16`
 
 Important:
@@ -102,6 +104,9 @@ The gateway calculates `HR48` from:
 - setpoint `C.SP`
 - hysteresis `HYSt`
 - output characteristic `AL.t`
+
+`AL.t` is polled as internal-only data for every configured channel and is not
+published to Modbus directly.
 
 Supported `AL.t` modes:
 

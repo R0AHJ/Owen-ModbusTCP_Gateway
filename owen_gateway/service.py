@@ -93,58 +93,63 @@ class OwenGatewayService:
         self._state_lock = asyncio.Lock()
 
     async def run(self) -> None:
-        await self.modbus.start()
-        self.modbus.publish_status(SERVICE_SLAVE_ID, STATUS_OFFLINE)
-        self.modbus.publish_telemetry(
-            SERVICE_SLAVE_ID,
-            last_error_code=ERROR_NONE,
-            success_counter=0,
-            timeout_counter=0,
-            protocol_error_counter=0,
-            poll_cycle_counter=0,
-        )
-        self._publish_line_statuses()
-        for slave_id in sorted({point.modbus_slave_id for point in self.config.points}):
-            self.modbus.publish_status(slave_id, STATUS_OFFLINE)
+        started_buses: list[str] = []
+        try:
+            await self.modbus.start()
+            self.modbus.publish_status(SERVICE_SLAVE_ID, STATUS_OFFLINE)
             self.modbus.publish_telemetry(
-                slave_id,
+                SERVICE_SLAVE_ID,
                 last_error_code=ERROR_NONE,
                 success_counter=0,
                 timeout_counter=0,
                 protocol_error_counter=0,
                 poll_cycle_counter=0,
             )
-        for bus in self.config.buses:
-            self.serial_clients[bus.name].connect()
+            self._publish_line_statuses()
+            for slave_id in sorted({point.modbus_slave_id for point in self.config.points}):
+                self.modbus.publish_status(slave_id, STATUS_OFFLINE)
+                self.modbus.publish_telemetry(
+                    slave_id,
+                    last_error_code=ERROR_NONE,
+                    success_counter=0,
+                    timeout_counter=0,
+                    protocol_error_counter=0,
+                    poll_cycle_counter=0,
+                )
+            for bus in self.config.buses:
+                self.serial_clients[bus.name].connect()
+                started_buses.append(bus.name)
+                self.logger.info(
+                    "bus started: name=%s serial=%s %s,%s%s%s",
+                    bus.name,
+                    bus.serial.port,
+                    bus.serial.baudrate,
+                    bus.serial.bytesize,
+                    bus.serial.parity,
+                    bus.serial.stopbits,
+                )
             self.logger.info(
-                "bus started: name=%s serial=%s %s,%s%s%s",
-                bus.name,
-                bus.serial.port,
-                bus.serial.baudrate,
-                bus.serial.bytesize,
-                bus.serial.parity,
-                bus.serial.stopbits,
+                "modbus started: %s:%s",
+                self.config.modbus.host,
+                self.config.modbus.port,
             )
-        self.logger.info(
-            "modbus started: %s:%s",
-            self.config.modbus.host,
-            self.config.modbus.port,
-        )
-        try:
             tasks = [
                 asyncio.create_task(self._poll_bus_loop(bus))
                 for bus in self.config.buses
             ]
             await asyncio.gather(*tasks)
         finally:
-            self.modbus.publish_status(SERVICE_SLAVE_ID, STATUS_OFFLINE)
-            for bus in self.config.buses:
-                self.bus_statuses[bus.name] = STATUS_OFFLINE
-            self._publish_line_statuses()
-            for slave_id in sorted({point.modbus_slave_id for point in self.config.points}):
-                self.modbus.publish_status(slave_id, STATUS_OFFLINE)
-            for client in self.serial_clients.values():
-                client.close()
+            try:
+                self.modbus.publish_status(SERVICE_SLAVE_ID, STATUS_OFFLINE)
+                for bus in self.config.buses:
+                    self.bus_statuses[bus.name] = STATUS_OFFLINE
+                self._publish_line_statuses()
+                for slave_id in sorted({point.modbus_slave_id for point in self.config.points}):
+                    self.modbus.publish_status(slave_id, STATUS_OFFLINE)
+            except RuntimeError:
+                pass
+            for bus_name in started_buses:
+                self.serial_clients[bus_name].close()
             await self.modbus.stop()
 
     async def _poll_bus_loop(self, bus: BusConfig) -> None:
@@ -256,16 +261,20 @@ class OwenGatewayService:
                         self.gateway_success_counter = _inc_counter(
                             self.gateway_success_counter
                         )
+                    target_description = (
+                        f"{point.register_type}:{point.modbus_address}"
+                        if point.publish_to_modbus
+                        else "internal-only"
+                    )
                     self.logger.debug(
-                        "published bus=%s slave=%s %s=%r from address=%s parameter=%s to %s:%s mark=%s status=%s",
+                        "processed bus=%s slave=%s %s=%r from address=%s parameter=%s target=%s mark=%s status=%s",
                         bus.name,
                         slave_id,
                         point.name,
                         value,
                         point.address,
                         point.parameter,
-                        point.register_type,
-                        point.modbus_address,
+                        target_description,
                         time_mark,
                         point_state.channel_status,
                     )

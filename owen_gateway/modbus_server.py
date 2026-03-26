@@ -17,6 +17,8 @@ class _StoreAdapter:
     context: object
 
     def write(self, slave_id: int, point: PointConfig, value: object) -> None:
+        if not point.publish_to_modbus:
+            return
         self.write_value(
             slave_id,
             point.register_type,
@@ -262,7 +264,7 @@ def _calc_size(
 ) -> int:
     max_index = 1
     for point in points:
-        if point.register_type in register_types:
+        if point.publish_to_modbus and point.register_type in register_types:
             width = 1 if point.modbus_data_type in {"bool", "uint16", "int16"} else 2
             max_index = max(max_index, point.modbus_address + width + 1)
             if point.time_mark_address is not None:

@@ -24,6 +24,9 @@ TRM138_TIME_MARK_BASE = TRM138_REGISTER_BASE + (
     TRM138_CHANNEL_COUNT * TRM138_VALUE_REGISTERS_PER_CHANNEL
 )
 TRM138_STATUS_BASE = TRM138_TIME_MARK_BASE + TRM138_CHANNEL_COUNT
+TRM138_SETPOINT_BASE = 56
+TRM138_HYST_BASE = 58
+TRM138_PARAMETER_BLOCK = 6
 
 
 def load_config_document(path: str | Path) -> dict[str, object]:
@@ -72,13 +75,12 @@ def render_config_summary(payload: dict[str, object]) -> str:
     for bus in resolved.buses:
         lines.append(
             f"{bus.name}: {bus.serial.port} {bus.serial.baudrate} {bus.serial.bytesize}{bus.serial.parity}{bus.serial.stopbits}, "
-            f"poll={bus.poll_interval_ms}ms, slave_base={bus.modbus_slave_base}"
+            f"poll={bus.poll_interval_ms}ms"
         )
         for device in devices.get(bus.name, []):
             lines.append(
                 f"  device {device['device']} -> SlaveID {device['slave_id']}, "
-                f"base_address={device['base_address']}, tag={device['tag']}, "
-                f"channels={device['channels']}"
+                f"base_address={device['base_address']}, channels={device['channels']}"
             )
     return "\n".join(lines)
 
@@ -92,7 +94,7 @@ def render_line_devices(payload: dict[str, object], line: int) -> str:
     for index, device in enumerate(devices, start=1):
         lines.append(
             f"{index}. device={device['device']} SlaveID={device['slave_id']} "
-            f"base_address={device['base_address']} tag={device['tag']} channels={device['channels']}"
+            f"base_address={device['base_address']} channels={device['channels']}"
         )
     return "\n".join(lines)
 
@@ -117,19 +119,17 @@ def render_device_details(
         f"{bus_name} device {selected['device']}",
         f"SlaveID: {selected['slave_id']}",
         f"Base address: {selected['base_address']}",
-        f"Tag: {selected['tag']}",
         "",
-        "| Channel | OVEN Address | Value Register | Time Mark | Status | Type |",
-        "|---|---:|---|---:|---:|---|",
+        "| Channel | OVEN Address | Read | Status | C.SP | HYSt |",
+        "|---|---:|---|---:|---|---|",
     ]
     for row in selected["channel_rows"]:
-        if row["value_start"] == row["value_end"]:
-            value_register = f"`{row['value_start']}`"
-        else:
-            value_register = f"`{row['value_start']},{row['value_end']}`"
         lines.append(
-            f"| `{row['channel']}` | `{row['address']}` | {value_register} | "
-            f"`{row['time_mark']}` | `{row['status']}` | `{row['value_type']}` |"
+            f"| `{row['channel']}` | `{row['address']}` | "
+            f"`HR{row['read_start']}..HR{row['read_end']}` | "
+            f"`HR{row['status']}` | "
+            f"`HR{row['setpoint_start']}..HR{row['setpoint_end']}` | "
+            f"`HR{row['hyst_start']}..HR{row['hyst_end']}` |"
         )
     return "\n".join(lines)
 
@@ -162,8 +162,6 @@ def render_modbus_map(payload: dict[str, object], config_name: str) -> str:
         "| `HR6` | aggregated poll cycle counter |",
         "| `HR10` | line 1 status |",
         "| `HR11` | line 2 status |",
-        "| `HR12` | line 3 status |",
-        "| `HR13` | line 4 status |",
         "",
         "Gateway status codes:",
         "",
@@ -189,7 +187,6 @@ def render_modbus_map(payload: dict[str, object], config_name: str) -> str:
                 "",
                 f"- serial: `{bus.serial.port}`, `{bus.serial.baudrate} {bus.serial.bytesize}{bus.serial.parity}{bus.serial.stopbits}`",
                 f"- poll interval: `{bus.poll_interval_ms} ms`",
-                f"- slave base: `{bus.modbus_slave_base}`",
                 "",
             ]
         )
@@ -199,34 +196,32 @@ def render_modbus_map(payload: dict[str, object], config_name: str) -> str:
             continue
         lines.extend(
             [
-                "| Device | SlaveID | Base Address | Tag | Channels |",
-                "|------:|--------:|-------------:|-----|----------|",
+                "| Device | SlaveID | Base Address | Channels |",
+                "|------:|--------:|-------------:|----------|",
             ]
         )
         for device in bus_devices:
             lines.append(
                 f"| `{device['device']}` | `{device['slave_id']}` | `{device['base_address']}` | "
-                f"`{device['tag']}` | `{device['channels']}` |"
+                f"`{device['channels']}` |"
             )
         lines.extend(
             [
                 "",
                 "Channel map for each device on this line:",
                 "",
-                "| Channel | OVEN Address | Value Register | Time Mark | Status | Type |",
-                "|--------:|-------------:|----------------|----------:|-------:|------|",
+                "| Channel | OVEN Address | rEAd | Status | C.SP | HYSt |",
+                "|--------:|-------------:|------|-------:|------|------|",
             ]
         )
         example = bus_devices[0]
         for channel in example["channel_rows"]:
-            if channel["value_start"] == channel["value_end"]:
-                value_register = f"`{channel['value_start']}`"
-            else:
-                value_register = f"`{channel['value_start']},{channel['value_end']}`"
             lines.append(
                 f"| `{channel['channel']}` | `{channel['address']}` | "
-                f"{value_register} | `{channel['time_mark']}` | `{channel['status']}` | "
-                f"`{channel['value_type']}` |"
+                f"`HR{channel['read_start']}..HR{channel['read_end']}` | "
+                f"`HR{channel['status']}` | "
+                f"`HR{channel['setpoint_start']}..HR{channel['setpoint_end']}` | "
+                f"`HR{channel['hyst_start']}..HR{channel['hyst_end']}` |"
             )
         lines.extend(
             [
@@ -236,6 +231,12 @@ def render_modbus_map(payload: dict[str, object], config_name: str) -> str:
                 "| Register | Meaning |",
                 "|---|---|",
                 "| `HR48` | LU state mask, bit0..bit7 -> LU1..LU8 |",
+                "",
+                "Internal-only parameters:",
+                "",
+                "- `AL.t` is polled for every configured channel",
+                "- `AL.t` participates in `HR48` calculation",
+                "- `AL.t` is not published to Modbus",
                 "",
                 "Channel status codes:",
                 "",
@@ -303,8 +304,7 @@ def add_trm138_device(
     line: int,
     base_address: int,
     channels: list[int],
-    tag: str,
-    parameter: str = "rEAd",
+    tag: str | None = None,
 ) -> dict[str, int | str]:
     buses = _get_buses(payload)
     bus_name = _line_name(line)
@@ -336,16 +336,12 @@ def add_trm138_device(
         }
     )
     device = _next_device_number(devices)
-    tag_slug = _slugify(tag) or f"trm138_{bus_name}_addr{base_address}"
-
     _append_trm138_points(
         points,
         bus_name=bus_name,
         device=device,
         base_address=base_address,
         channels=requested_channels,
-        tag_slug=tag_slug,
-        parameter=parameter,
     )
 
     points.sort(key=lambda entry: (entry.get("bus", ""), int(entry.get("device", 0)), int(entry.get("address", 0))))
@@ -354,7 +350,6 @@ def add_trm138_device(
         "device": device,
         "base_address": base_address,
         "channels": len(requested_channels),
-        "tag": tag_slug,
     }
 
 
@@ -439,12 +434,9 @@ def update_trm138_channels(
     current_points = grouped[matched_device]
     base = min(
         int(point["address"])
-        - (_channel_number_from_modbus_address(int(point["modbus_address"])) - 1)
         for point in current_points
+        if str(point.get("parameter")) == "rEAd"
     )
-    tag_slug = _common_tag_prefix([str(point["name"]) for point in current_points])
-    parameter = str(current_points[0].get("parameter", "rEAd"))
-
     payload["points"] = [
         point
         for point in points
@@ -457,8 +449,6 @@ def update_trm138_channels(
         device=matched_device,
         base_address=base,
         channels=requested_channels,
-        tag_slug=tag_slug,
-        parameter=parameter,
     )
     target_points.sort(
         key=lambda entry: (
@@ -471,7 +461,6 @@ def update_trm138_channels(
         "bus": bus_name,
         "device": matched_device,
         "base_address": base,
-        "tag": tag_slug,
         "channels": ",".join(f"CH{channel}" for channel in requested_channels),
     }
 
@@ -579,24 +568,68 @@ def _append_trm138_points(
     device: int,
     base_address: int,
     channels: list[int],
-    tag_slug: str,
-    parameter: str,
 ) -> None:
     for channel in channels:
-        modbus_address = _value_register_start(channel)
+        read_register = _value_register_start(channel)
+        setpoint_register = _setpoint_register_start(channel)
+        hyst_register = _hysteresis_register_start(channel)
+        point_prefix = f"a{base_address}_ch{channel}"
         points.append(
             {
-                "name": f"{tag_slug}_ch{channel}",
+                "name": f"{point_prefix}_read_R{read_register}",
                 "bus": bus_name,
                 "device": device,
+                "modbus_slave_id": base_address,
                 "address": base_address + channel - 1,
-                "parameter": parameter,
+                "parameter": "rEAd",
                 "protocol_format": "float32",
                 "register_type": "holding_register",
-                "modbus_address": modbus_address,
+                "modbus_address": read_register,
                 "modbus_data_type": "float32",
-                "time_mark_address": _time_mark_register(channel),
                 "channel_status_address": _status_register(channel),
+            }
+        )
+        points.append(
+            {
+                "name": f"{point_prefix}_sp_R{setpoint_register}",
+                "bus": bus_name,
+                "device": device,
+                "modbus_slave_id": base_address,
+                "address": base_address + channel - 1,
+                "parameter": "C.SP",
+                "protocol_format": "stored_dot",
+                "register_type": "holding_register",
+                "modbus_address": setpoint_register,
+                "modbus_data_type": "float32",
+            }
+        )
+        points.append(
+            {
+                "name": f"{point_prefix}_hyst_R{hyst_register}",
+                "bus": bus_name,
+                "device": device,
+                "modbus_slave_id": base_address,
+                "address": base_address + channel - 1,
+                "parameter": "HYSt",
+                "protocol_format": "stored_dot",
+                "register_type": "holding_register",
+                "modbus_address": hyst_register,
+                "modbus_data_type": "float32",
+            }
+        )
+        points.append(
+            {
+                "name": f"{point_prefix}_alt_internal",
+                "bus": bus_name,
+                "device": device,
+                "modbus_slave_id": base_address,
+                "address": base_address + channel - 1,
+                "parameter": "AL.t",
+                "protocol_format": "uint16",
+                "register_type": "holding_register",
+                "modbus_address": 0,
+                "modbus_data_type": "uint16",
+                "publish_to_modbus": False,
             }
         )
 
@@ -625,12 +658,11 @@ def _match_device(
     normalized_tag = _slugify(tag) if tag is not None else None
     for device_number, device_points in grouped.items():
         device_base_address = min(int(point["address"]) for point in device_points)
-        device_tag = _common_tag_prefix([str(point["name"]) for point in device_points])
         if device is not None and device_number != device:
             continue
         if base_address is not None and device_base_address != base_address:
             continue
-        if normalized_tag is not None and device_tag != normalized_tag:
+        if normalized_tag is not None and f"a{device_base_address}" != normalized_tag:
             continue
         if matched_device is not None:
             raise ValueError("device selector is ambiguous")
@@ -657,33 +689,35 @@ def _collect_devices(payload: dict[str, object]) -> dict[str, list[dict[str, obj
     for point in resolved.points:
         grouped.setdefault((point.bus, point.device), []).append(point)
     for (bus_name, device_number), points in grouped.items():
-        ordered_points = sorted(points, key=lambda point: point.address)
+        ordered_points = sorted(points, key=lambda point: (point.address, point.parameter))
+        read_points = [point for point in ordered_points if point.parameter == "rEAd"]
         first = ordered_points[0]
-        base_address = min(
-            point.address - (_channel_number_from_modbus_address(point.modbus_address) - 1)
-            for point in ordered_points
+        base_address = int(first.modbus_slave_id)
+        channels = sorted(
+            _channel_number_from_oven_address(point.address, base_address)
+            for point in read_points
         )
         devices[bus_name].append(
             {
                 "device": device_number,
                 "slave_id": first.modbus_slave_id,
                 "base_address": base_address,
-                "tag": _common_tag_prefix([point.name for point in ordered_points]),
                 "channels": ",".join(
-                    f"CH{_channel_number_from_modbus_address(point.modbus_address)}"
-                    for point in ordered_points
+                    f"CH{channel}" for channel in channels
                 ),
                 "channel_rows": [
                     {
-                        "channel": _channel_number_from_modbus_address(point.modbus_address),
-                        "address": point.address,
-                        "value_start": point.modbus_address,
-                        "value_end": point.modbus_address + 1,
-                        "time_mark": point.time_mark_address,
-                        "status": point.channel_status_address,
-                        "value_type": point.modbus_data_type,
+                        "channel": channel,
+                        "address": base_address + channel - 1,
+                        "read_start": _value_register_start(channel),
+                        "read_end": _value_register_start(channel) + 1,
+                        "status": _status_register(channel),
+                        "setpoint_start": _setpoint_register_start(channel),
+                        "setpoint_end": _setpoint_register_start(channel) + 1,
+                        "hyst_start": _hysteresis_register_start(channel),
+                        "hyst_end": _hysteresis_register_start(channel) + 1,
                     }
-                    for point in ordered_points
+                    for channel in channels
                 ],
             }
         )
@@ -736,8 +770,20 @@ def _channel_number_from_modbus_address(modbus_address: int) -> int:
     ) + 1
 
 
+def _channel_number_from_oven_address(address: int, base_address: int) -> int:
+    return (address - base_address) + 1
+
+
 def _value_register_start(channel: int) -> int:
     return TRM138_REGISTER_BASE + (channel - 1) * TRM138_VALUE_REGISTERS_PER_CHANNEL
+
+
+def _setpoint_register_start(channel: int) -> int:
+    return TRM138_SETPOINT_BASE + (channel - 1) * TRM138_PARAMETER_BLOCK
+
+
+def _hysteresis_register_start(channel: int) -> int:
+    return TRM138_HYST_BASE + (channel - 1) * TRM138_PARAMETER_BLOCK
 
 
 def _time_mark_register(channel: int) -> int:

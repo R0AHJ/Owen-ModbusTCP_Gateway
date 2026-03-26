@@ -36,7 +36,7 @@ VALID_MODBUS_DATA_TYPES = {
     "float32",
 }
 
-MAX_BUSES = 4
+MAX_BUSES = 2
 MAX_DEVICES_PER_BUS = 32
 MAX_TOTAL_DEVICES = 128
 
@@ -104,6 +104,7 @@ class PointConfig:
     register_type: str
     modbus_address: int
     modbus_data_type: str
+    publish_to_modbus: bool = True
     time_mark_address: int | None = None
     channel_status_address: int | None = None
 
@@ -280,38 +281,39 @@ def validate_config(config: OwenGatewayConfig) -> None:
                 f"and {point.bus}/device{point.device}"
             )
 
-        used = occupied.setdefault((point.modbus_slave_id, point.register_type), set())
-        if config.status.enabled and point.register_type == config.status.register_type:
-            used.update(
-                range(
-                    config.status.modbus_address,
-                    config.status.modbus_address
-                    + register_width(config.status.modbus_data_type),
+        if point.publish_to_modbus:
+            used = occupied.setdefault((point.modbus_slave_id, point.register_type), set())
+            if config.status.enabled and point.register_type == config.status.register_type:
+                used.update(
+                    range(
+                        config.status.modbus_address,
+                        config.status.modbus_address
+                        + register_width(config.status.modbus_data_type),
+                    )
                 )
-            )
-        if config.telemetry.enabled and point.register_type == config.telemetry.register_type:
-            used.update(
-                {
-                    config.telemetry.last_error_code_address,
-                    config.telemetry.success_counter_address,
-                    config.telemetry.timeout_counter_address,
-                    config.telemetry.protocol_error_counter_address,
-                    config.telemetry.poll_cycle_counter_address,
-                }
-            )
-        width = register_width(point.modbus_data_type)
-        indexes = set(range(point.modbus_address, point.modbus_address + width))
-        if point.time_mark_address is not None:
-            indexes.add(point.time_mark_address)
-        if point.channel_status_address is not None:
-            indexes.add(point.channel_status_address)
-        overlap = used.intersection(indexes)
-        if overlap:
-            raise ValueError(
-                f"overlapping Modbus mapping for {point.name} at "
-                f"{point.register_type}:{min(overlap)}"
-            )
-        used.update(indexes)
+            if config.telemetry.enabled and point.register_type == config.telemetry.register_type:
+                used.update(
+                    {
+                        config.telemetry.last_error_code_address,
+                        config.telemetry.success_counter_address,
+                        config.telemetry.timeout_counter_address,
+                        config.telemetry.protocol_error_counter_address,
+                        config.telemetry.poll_cycle_counter_address,
+                    }
+                )
+            width = register_width(point.modbus_data_type)
+            indexes = set(range(point.modbus_address, point.modbus_address + width))
+            if point.time_mark_address is not None:
+                indexes.add(point.time_mark_address)
+            if point.channel_status_address is not None:
+                indexes.add(point.channel_status_address)
+            overlap = used.intersection(indexes)
+            if overlap:
+                raise ValueError(
+                    f"overlapping Modbus mapping for {point.name} at "
+                    f"{point.register_type}:{min(overlap)}"
+                )
+            used.update(indexes)
         devices_per_bus[point.bus].add(point.device)
 
     total_devices = sum(len(devices) for devices in devices_per_bus.values())
@@ -362,6 +364,8 @@ def _load_point(entry: dict[str, object], buses: list[BusConfig]) -> PointConfig
         point_data["modbus_slave_id"] = None
     if "parameter_index" not in point_data:
         point_data["parameter_index"] = None
+    if "publish_to_modbus" not in point_data:
+        point_data["publish_to_modbus"] = True
     return PointConfig(**point_data)
 
 
@@ -387,11 +391,6 @@ def _resolve_modbus_slave_ids(points: list[PointConfig], buses: list[BusConfig])
             )
         if explicit_ids:
             resolved_id = next(iter(explicit_ids))
-            if resolved_id != base_address:
-                raise ValueError(
-                    f"modbus_slave_id must equal device base address for {bus_name}/device: "
-                    f"{resolved_id} != {base_address}"
-                )
         else:
             bus = bus_by_name[bus_name]
             assert bus.modbus_slave_base is not None

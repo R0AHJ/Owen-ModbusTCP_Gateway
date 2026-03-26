@@ -63,12 +63,12 @@ class ConfigToolsTests(unittest.TestCase):
 
         self.assertEqual(result["device"], 1)
         points = payload["points"]
-        self.assertEqual(len(points), 3)
-        self.assertEqual(points[0]["name"], "trm138_main_ch1")
+        self.assertEqual(len(points), 12)
+        self.assertEqual(points[0]["name"], "a96_ch1_read_R16")
         self.assertEqual(points[0]["modbus_address"], 16)
-        self.assertEqual(points[1]["modbus_address"], 18)
-        self.assertEqual(points[2]["address"], 103)
-        self.assertEqual(points[2]["modbus_address"], 30)
+        self.assertEqual(points[1]["modbus_address"], 56)
+        self.assertEqual(points[8]["address"], 103)
+        self.assertEqual(points[8]["modbus_address"], 30)
 
     def test_add_trm138_device_uses_next_free_device_number(self) -> None:
         payload = load_config_document("missing-test-config.json")
@@ -102,8 +102,8 @@ class ConfigToolsTests(unittest.TestCase):
         self.assertEqual(result["device"], 2)
         config = load_config_from_payload(payload)
         slave_ids = {point.name: point.modbus_slave_id for point in config.points}
-        self.assertEqual(slave_ids["dev96_ch1"], 96)
-        self.assertEqual(slave_ids["dev48_ch1"], 48)
+        self.assertEqual(slave_ids["a96_ch1_read_R16"], 96)
+        self.assertEqual(slave_ids["a48_ch1_read_R16"], 48)
 
     def test_add_trm138_device_rejects_address_overlap(self) -> None:
         payload = load_config_document("missing-test-config.json")
@@ -164,7 +164,8 @@ class ConfigToolsTests(unittest.TestCase):
         self.assertIn("Modbus TCP: 0.0.0.0:15020", summary)
         self.assertIn("line1: COM6 9600 8N1", summary)
         self.assertIn("device 1 -> SlaveID 96", summary)
-        self.assertIn("tag=main_trm", summary)
+        self.assertIn("base_address=96", summary)
+        self.assertIn("channels=CH1,CH2", summary)
 
     def test_render_device_details_includes_slave_id_and_registers(self) -> None:
         payload = load_config_document("missing-test-config.json")
@@ -190,8 +191,8 @@ class ConfigToolsTests(unittest.TestCase):
         details = render_device_details(payload, line=1, base_address=96)
 
         self.assertIn("SlaveID: 96", details)
-        self.assertIn("| `1` | `96` | `16,17` | `32` | `40` | `float32` |", details)
-        self.assertIn("| `2` | `97` | `18,19` | `33` | `41` | `float32` |", details)
+        self.assertIn("| `1` | `96` | `HR16..HR17` | `HR40` | `HR56..HR57` | `HR58..HR59` |", details)
+        self.assertIn("| `2` | `97` | `HR18..HR19` | `HR41` | `HR62..HR63` | `HR64..HR65` |", details)
 
     def test_get_line_devices_returns_device_inventory(self) -> None:
         payload = load_config_document("missing-test-config.json")
@@ -244,8 +245,8 @@ class ConfigToolsTests(unittest.TestCase):
         self.assertIn("# Generated Modbus Map: owen_config.json", content)
         self.assertIn("Service `SlaveID`: `1`", content)
         self.assertIn("## line2", content)
-        self.assertIn("| `1` | `48` | `48` | `line2_dev` | `CH1,CH2` |", content)
-        self.assertIn("| `1` | `48` | `16,17` | `32` | `40` | `float32` |", content)
+        self.assertIn("| `1` | `48` | `48` | `CH1,CH2` |", content)
+        self.assertIn("| `1` | `48` | `HR16..HR17` | `HR40` | `HR56..HR57` | `HR58..HR59` |", content)
         self.assertIn("| `HR48` | LU state mask, bit0..bit7 -> LU1..LU8 |", content)
 
     def test_export_config_document_writes_json_and_map(self) -> None:
@@ -276,7 +277,7 @@ class ConfigToolsTests(unittest.TestCase):
 
             self.assertTrue(target.exists())
             self.assertTrue(map_path.exists())
-            self.assertIn('"name": "main_trm_ch1"', target.read_text(encoding="utf-8"))
+            self.assertIn('"name": "a96_ch1_read_R16"', target.read_text(encoding="utf-8"))
             self.assertIn("Service `SlaveID`: `1`", map_path.read_text(encoding="utf-8"))
 
     def test_remove_trm138_device_by_base_address(self) -> None:
@@ -298,9 +299,9 @@ class ConfigToolsTests(unittest.TestCase):
         result = remove_trm138_device(payload, line=1, base_address=96)
 
         self.assertEqual(result["device"], 1)
-        self.assertEqual(result["removed_points"], 2)
-        self.assertEqual(len(payload["points"]), 1)
-        self.assertEqual(payload["points"][0]["name"], "dev48_ch1")
+        self.assertEqual(result["removed_points"], 8)
+        self.assertEqual(len(payload["points"]), 4)
+        self.assertEqual(payload["points"][0]["name"], "a48_ch1_read_R16")
 
     def test_remove_line_deletes_bus_and_points(self) -> None:
         payload = load_config_document("missing-test-config.json")
@@ -331,9 +332,9 @@ class ConfigToolsTests(unittest.TestCase):
 
         result = remove_line(payload, line=2)
 
-        self.assertEqual(result["removed_points"], 2)
+        self.assertEqual(result["removed_points"], 8)
         self.assertEqual([bus["name"] for bus in payload["buses"]], ["line1"])
-        self.assertEqual(len(payload["points"]), 1)
+        self.assertEqual(len(payload["points"]), 4)
         self.assertEqual(payload["points"][0]["bus"], "line1")
 
     def test_update_trm138_channels_keeps_device_and_changes_points(self) -> None:
@@ -367,11 +368,11 @@ class ConfigToolsTests(unittest.TestCase):
         self.assertEqual(result["device"], 1)
         self.assertEqual(result["channels"], "CH1,CH2,CH3,CH4,CH5,CH6,CH8")
         point_names = [point["name"] for point in payload["points"]]
-        self.assertNotIn("dev96_ch7", point_names)
-        self.assertIn("dev96_ch8", point_names)
+        self.assertNotIn("a96_ch7_read_R28", point_names)
+        self.assertIn("a96_ch8_read_R30", point_names)
         config = load_config_from_payload(payload)
         slave_ids = {point.name: point.modbus_slave_id for point in config.points}
-        self.assertEqual(slave_ids["dev96_ch8"], 96)
+        self.assertEqual(slave_ids["a96_ch8_read_R30"], 96)
 
     def test_summary_keeps_original_base_address_for_sparse_channels(self) -> None:
         payload = load_config_document("missing-test-config.json")
@@ -400,7 +401,7 @@ class ConfigToolsTests(unittest.TestCase):
         self.assertIn("base_address=96", summary)
         self.assertIn("channels=CH7", summary)
         self.assertIn("Base address: 96", details)
-        self.assertIn("| `7` | `102` | `28,29` | `38` | `46` | `float32` |", details)
+        self.assertIn("| `7` | `102` | `HR28..HR29` | `HR46` | `HR92..HR93` | `HR94..HR95` |", details)
 
 
 def load_config_from_payload(payload: dict[str, object]):
