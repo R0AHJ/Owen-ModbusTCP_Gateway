@@ -215,6 +215,8 @@ def render_modbus_map(payload: dict[str, object], config_name: str) -> str:
             ]
         )
         example = bus_devices[0]
+        # Every TRM138 on the line uses the same per-channel register layout,
+        # so one channel table is enough to describe the whole device family.
         for channel in example["channel_rows"]:
             lines.append(
                 f"| `{channel['channel']}` | `{channel['address']}` | "
@@ -574,6 +576,8 @@ def _append_trm138_points(
         setpoint_register = _setpoint_register_start(channel)
         hyst_register = _hysteresis_register_start(channel)
         point_prefix = f"a{base_address}_ch{channel}"
+        # Each selected channel expands into one published process value, two
+        # published setup values and one internal-only alarm characteristic.
         points.append(
             {
                 "name": f"{point_prefix}_read_R{read_register}",

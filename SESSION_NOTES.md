@@ -1,5 +1,136 @@
 # Session Notes
 
+## Current Session 2026-03-27
+
+### Current Model
+
+Project now uses the newer TRM138 logic-mode model.
+
+- maximum `2` RS-485 lines
+- service telemetry is always on `SlaveID 1`
+- device `SlaveID` is global and should be treated as the device base OVEN address
+- line-local `SlaveID` ranges are no longer the active model for current work
+- `HR48` is calculated for every configured TRM138 device
+- `C.SP` and `HYSt` are published to Modbus together with `rEAd`
+- `AL.t` is polled as internal-only data and is not published to Modbus
+
+### Naming
+
+Current generated point names for TRM138 use the short form:
+
+- `a48_ch1_read_R16`
+- `a48_ch1_sp_R56`
+- `a48_ch1_hyst_R58`
+- `a48_ch1_alt_internal`
+
+Rule:
+
+- `a48` = device base address / `SlaveID`
+- `ch1` = channel
+- suffix contains short parameter name
+- published values include starting register in the name
+- internal-only `AL.t` does not include a fake Modbus register in the name
+
+### Important Runtime Notes
+
+- `publish_to_modbus=False` is implemented and tested
+- internal-only points still participate in `HR48` calculation
+- gateway startup cleanup was fixed so already-open serial ports are closed on startup failure
+- debug logging for internal-only points now shows `target=internal-only`
+
+### Verified On Real Hardware
+
+Single live device:
+
+- config used for checks:
+  - `owen_config.single_trm138.com4.addr48.logic.json` was used during live validation but was not kept in git
+- live device on `COM4`, base address / `SlaveID 48`
+- reading over TCP was verified for:
+  - `HR16..17` (`rEAd`)
+  - `HR40` (channel status)
+  - `HR48` (LU mask)
+  - `HR56..57` (`C.SP`)
+  - `HR58..59` (`HYSt`)
+
+Observed behavior:
+
+- `HR48` reacts correctly to `C.SP` changes
+- during one run a late `status=4` appeared, but after repeating with laptop power connected the status stayed `1`
+- likely cause of that single `status=4` event was USB adapter power loss / laptop sleep behavior
+
+Repeated stable check with external power:
+
+- channel status for live device stayed `1`
+- service counters increased normally
+- no timeout / protocol error accumulation was observed
+
+### Problem Device Notes
+
+There was a second TRM138 at base address `96` on `COM6`.
+
+What was observed:
+
+- after remote parameter writes the device can become unstable
+- some writes may still partially apply
+- device may then start returning invalid frames
+- recovery may require local reboot
+
+This is currently treated as device/line quality behavior, not as a gateway logic bug.
+
+Direct observations:
+
+- OVEN polling then produces `invalid frame markers`
+- trying direct `Modbus RTU` read on `unit_id 96`, registers `3..4` did not confirm a useful Modbus response
+- changing line speed from `9600` to `2400` alone did not restore valid OVEN traffic
+
+### Branch / Git State
+
+Changes from this session were committed and pushed.
+
+- `master`:
+  - `1b642a2` `Add TRM138 logic-mode mapping and diagnostics`
+- `feature/linux-deploy`:
+  - merged from `master`
+  - merge commit: `0f2a9eb`
+
+Why branches were not flattened:
+
+- common code changes belong in `master`
+- `feature/linux-deploy` keeps Linux-specific deployment/examples on top
+
+### Files Most Relevant Next Time
+
+- `owen_gateway/config.py`
+- `owen_gateway/config_tools.py`
+- `owen_gateway/service.py`
+- `owen_gateway/modbus_server.py`
+- `tests/test_config.py`
+- `tests/test_config_tools.py`
+- `tests/test_service.py`
+
+### What Not To Re-Explain Next Time
+
+- `HR48` is already implemented and validated on hardware
+- `AL.t` is intentionally internal-only
+- `C.SP` / `HYSt` publication is already implemented
+- `2` lines is the intentional limit now
+- current naming format with `a{address}_ch{n}_..._R{reg}` was explicitly chosen
+- global `SlaveID` model is intentional
+
+### Quick Restart Commands
+
+Run tests:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests
+```
+
+Run gateway for live device checks:
+
+```powershell
+.\.venv\Scripts\python.exe -m owen_gateway --config owen_config.single_trm138.com6.json --log-level INFO
+```
+
 ## Current State
 
 Project is reduced to the `OWEN RS-485 -> Modbus-TCP` scenario.

@@ -140,6 +140,9 @@ class OwenGatewayService:
             await asyncio.gather(*tasks)
         finally:
             try:
+                # Startup may fail after opening only part of the configured
+                # serial buses, so shutdown must tolerate a partially started
+                # Modbus stack and close only successfully opened ports.
                 self.modbus.publish_status(SERVICE_SLAVE_ID, STATUS_OFFLINE)
                 for bus in self.config.buses:
                     self.bus_statuses[bus.name] = STATUS_OFFLINE
@@ -463,6 +466,9 @@ class OwenGatewayService:
         }
 
         mask = 0
+        # LU1..LU8 are derived from channel addresses starting at the device
+        # base address / SlaveID. Previous mask state is reused for hysteresis
+        # modes that should hold their output inside the dead band.
         for lu_index, channel_address in enumerate(range(slave_id, slave_id + LOGIC_UNIT_COUNT)):
             setpoint = _as_float(setpoints.get(channel_address))
             hysteresis = abs(_as_float(hysteresis_values.get(channel_address), default=0.0))
@@ -523,6 +529,8 @@ def _group_points_by_bus_device(
 
 
 def _map_protocol_error(point: object, frame: object) -> int:
+    # Keep telemetry coarse-grained: bad request flag and parameter hash
+    # mismatches are tracked separately, everything else is counted as decode.
     if frame is not None and getattr(frame, "request", False):
         return ERROR_BAD_FLAG
     if frame is not None and getattr(point, "parameter", None) is not None:
@@ -533,6 +541,7 @@ def _map_protocol_error(point: object, frame: object) -> int:
 
 
 def _extract_time_mark(payload: bytes) -> int | None:
+    # Operational OVEN values may append a 2-byte time mark after the payload.
     if len(payload) == 6:
         return int.from_bytes(payload[4:6], "big")
     return None
