@@ -63,6 +63,8 @@ def decode_frame(raw_frame: bytes) -> OwenFrame:
     if not raw_frame.startswith(START_MARKER) or not raw_frame.endswith(END_MARKER):
         raise ValueError("invalid frame markers")
 
+    # OVEN frames are ASCII nibble-encoded on the wire, so the body must be
+    # restored before CRC and header fields can be validated.
     body = _nibble_decode(raw_frame[1:-1])
     if len(body) < 4:
         raise ValueError("frame is too short")
@@ -75,6 +77,8 @@ def decode_frame(raw_frame: bytes) -> OwenFrame:
             f"crc mismatch: received=0x{received_crc:04X} expected=0x{calculated_crc:04X}"
         )
 
+    # The compact 2-byte header stores 11-bit network address, request flag
+    # and payload size in a packed bit layout defined by the OVEN protocol.
     header = header_and_data[0:2]
     block = header_and_data[2:]
     address = (header[0] << 3) | ((header[1] >> 5) & 0x07)
@@ -97,7 +101,8 @@ def decode_payload(payload: bytes, protocol_format: str) -> object:
         if len(payload) == 4:
             return struct.unpack(">f", payload)[0]
         if len(payload) == 6:
-            # Indexed values and operational values with a time mark both append 2 bytes.
+            # Indexed values and operational values with a time mark both append
+            # 2 service bytes after the 4-byte float payload.
             return struct.unpack(">f", payload[:4])[0]
         raise ValueError(f"float32 payload must be 4 or 6 bytes, got {len(payload)}")
     if protocol_format == "int16":
@@ -147,6 +152,8 @@ def hash_parameter_name(name: str) -> int:
     normalized = _normalize_name(name)
     if not 1 <= len(normalized) <= 4:
         raise ValueError("OVEN parameter name must be 1..4 encoded symbols")
+    # OVEN hashes parameter names as a fixed-width 4-symbol field padded with
+    # spaces, with the "dot" attribute folded into each symbol code.
     while len(normalized) < 4:
         normalized.append(39 * 2)
 

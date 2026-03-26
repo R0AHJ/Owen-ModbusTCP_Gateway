@@ -17,6 +17,8 @@ class _StoreAdapter:
     context: object
 
     def write(self, slave_id: int, point: PointConfig, value: object) -> None:
+        # Internal-only points still participate in service logic, but they do
+        # not occupy user-visible Modbus registers.
         if not point.publish_to_modbus:
             return
         self.write_value(
@@ -264,6 +266,8 @@ def _calc_size(
 ) -> int:
     max_index = 1
     for point in points:
+        # Register blocks are sized only from published points; internal-only
+        # points such as AL.t must not inflate the visible Modbus map.
         if point.publish_to_modbus and point.register_type in register_types:
             width = 1 if point.modbus_data_type in {"bool", "uint16", "int16"} else 2
             max_index = max(max_index, point.modbus_address + width + 1)
