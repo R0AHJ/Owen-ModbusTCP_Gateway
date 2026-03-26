@@ -10,6 +10,7 @@ from owen_gateway.encoding import register_width
 VALID_PROTOCOL_FORMATS = {
     "float32",
     "int16",
+    "stored_dot",
     "uint16",
     "uint32",
     "raw",
@@ -27,6 +28,7 @@ DEFAULT_BUS_SLAVE_BASES = (10, 50, 90, 130)
 
 VALID_MODBUS_DATA_TYPES = {
     "bool",
+    "stored_dot",
     "uint16",
     "int16",
     "uint32",
@@ -34,7 +36,7 @@ VALID_MODBUS_DATA_TYPES = {
     "float32",
 }
 
-MAX_BUSES = 4
+MAX_BUSES = 2
 MAX_DEVICES_PER_BUS = 32
 MAX_TOTAL_DEVICES = 128
 
@@ -85,7 +87,6 @@ class TelemetryConfig:
 
 @dataclass(slots=True)
 class HealthConfig:
-    stale_after_cycles: int
     fault_after_failures: int
     recovery_poll_interval_cycles: int
 
@@ -98,10 +99,12 @@ class PointConfig:
     modbus_slave_id: int | None
     address: int
     parameter: str
+    parameter_index: int | None
     protocol_format: str
     register_type: str
     modbus_address: int
     modbus_data_type: str
+    publish_to_modbus: bool = True
     time_mark_address: int | None = None
     channel_status_address: int | None = None
 
@@ -130,7 +133,7 @@ def load_config(path: str | Path) -> OwenGatewayConfig:
         telemetry=TelemetryConfig(
             **payload.get("telemetry", _default_telemetry_config())
         ),
-        health=HealthConfig(**payload.get("health", _default_health_config())),
+        health=_load_health_config(payload.get("health")),
         points=points,
     )
     validate_config(config)
@@ -209,8 +212,6 @@ def validate_config(config: OwenGatewayConfig) -> None:
                 "telemetry mapping overlaps status register at "
                 f"{config.status.register_type}:{min(overlap)}"
             )
-    if config.health.stale_after_cycles < 1:
-        raise ValueError("health.stale_after_cycles must be >= 1")
     if config.health.fault_after_failures < 1:
         raise ValueError("health.fault_after_failures must be >= 1")
     if config.health.recovery_poll_interval_cycles < 1:
@@ -220,30 +221,6 @@ def validate_config(config: OwenGatewayConfig) -> None:
     devices_per_bus: dict[str, set[int]] = {bus.name: set() for bus in config.buses}
     device_to_slave: dict[tuple[str, int], int] = {}
     slave_to_device: dict[int, tuple[str, int]] = {}
-    bus_ranges: list[tuple[str, int, int]] = []
-    for bus in config.buses:
-        assert bus.modbus_slave_base is not None
-        bus_ranges.append(
-            (
-                bus.name,
-                bus.modbus_slave_base,
-                bus.modbus_slave_base + MAX_DEVICES_PER_BUS - 1,
-            )
-        )
-    for index, (bus_name, start, end) in enumerate(bus_ranges):
-        if SERVICE_SLAVE_ID >= start and SERVICE_SLAVE_ID <= end:
-            raise ValueError(
-                f"bus {bus_name}: slave id range {start}..{end} overlaps reserved service slave {SERVICE_SLAVE_ID}"
-            )
-        if end > 247:
-            raise ValueError(
-                f"bus {bus_name}: slave id range exceeds Modbus limit: {end} > 247"
-            )
-        for other_name, other_start, other_end in bus_ranges[index + 1:]:
-            if start <= other_end and other_start <= end:
-                raise ValueError(
-                    f"slave id ranges overlap: {bus_name} {start}..{end} and {other_name} {other_start}..{other_end}"
-                )
     for point in config.points:
         if point.bus not in bus_names:
             raise ValueError(f"unknown bus for {point.name}: {point.bus}")
@@ -263,6 +240,10 @@ def validate_config(config: OwenGatewayConfig) -> None:
             raise ValueError(f"modbus_slave_id 1 is reserved for service tags: {point.name}")
         if point.address < 0 or point.address > 2047:
             raise ValueError(f"invalid OVEN address for {point.name}: {point.address}")
+        if point.parameter_index is not None and not (0 <= point.parameter_index <= 0xFFFF):
+            raise ValueError(
+                f"invalid parameter_index for {point.name}: {point.parameter_index}, expected 0..65535"
+            )
         if point.protocol_format not in VALID_PROTOCOL_FORMATS:
             raise ValueError(
                 f"unsupported protocol_format for {point.name}: {point.protocol_format}"
@@ -300,38 +281,39 @@ def validate_config(config: OwenGatewayConfig) -> None:
                 f"and {point.bus}/device{point.device}"
             )
 
-        used = occupied.setdefault((point.modbus_slave_id, point.register_type), set())
-        if config.status.enabled and point.register_type == config.status.register_type:
-            used.update(
-                range(
-                    config.status.modbus_address,
-                    config.status.modbus_address
-                    + register_width(config.status.modbus_data_type),
+        if point.publish_to_modbus:
+            used = occupied.setdefault((point.modbus_slave_id, point.register_type), set())
+            if config.status.enabled and point.register_type == config.status.register_type:
+                used.update(
+                    range(
+                        config.status.modbus_address,
+                        config.status.modbus_address
+                        + register_width(config.status.modbus_data_type),
+                    )
                 )
-            )
-        if config.telemetry.enabled and point.register_type == config.telemetry.register_type:
-            used.update(
-                {
-                    config.telemetry.last_error_code_address,
-                    config.telemetry.success_counter_address,
-                    config.telemetry.timeout_counter_address,
-                    config.telemetry.protocol_error_counter_address,
-                    config.telemetry.poll_cycle_counter_address,
-                }
-            )
-        width = register_width(point.modbus_data_type)
-        indexes = set(range(point.modbus_address, point.modbus_address + width))
-        if point.time_mark_address is not None:
-            indexes.add(point.time_mark_address)
-        if point.channel_status_address is not None:
-            indexes.add(point.channel_status_address)
-        overlap = used.intersection(indexes)
-        if overlap:
-            raise ValueError(
-                f"overlapping Modbus mapping for {point.name} at "
-                f"{point.register_type}:{min(overlap)}"
-            )
-        used.update(indexes)
+            if config.telemetry.enabled and point.register_type == config.telemetry.register_type:
+                used.update(
+                    {
+                        config.telemetry.last_error_code_address,
+                        config.telemetry.success_counter_address,
+                        config.telemetry.timeout_counter_address,
+                        config.telemetry.protocol_error_counter_address,
+                        config.telemetry.poll_cycle_counter_address,
+                    }
+                )
+            width = register_width(point.modbus_data_type)
+            indexes = set(range(point.modbus_address, point.modbus_address + width))
+            if point.time_mark_address is not None:
+                indexes.add(point.time_mark_address)
+            if point.channel_status_address is not None:
+                indexes.add(point.channel_status_address)
+            overlap = used.intersection(indexes)
+            if overlap:
+                raise ValueError(
+                    f"overlapping Modbus mapping for {point.name} at "
+                    f"{point.register_type}:{min(overlap)}"
+                )
+            used.update(indexes)
         devices_per_bus[point.bus].add(point.device)
 
     total_devices = sum(len(devices) for devices in devices_per_bus.values())
@@ -380,6 +362,10 @@ def _load_point(entry: dict[str, object], buses: list[BusConfig]) -> PointConfig
         point_data["device"] = 1
     if "modbus_slave_id" not in point_data:
         point_data["modbus_slave_id"] = None
+    if "parameter_index" not in point_data:
+        point_data["parameter_index"] = None
+    if "publish_to_modbus" not in point_data:
+        point_data["publish_to_modbus"] = True
     return PointConfig(**point_data)
 
 
@@ -393,6 +379,7 @@ def _resolve_modbus_slave_ids(points: list[PointConfig], buses: list[BusConfig])
         grouped.setdefault((point.bus, point.device), []).append(point)
 
     for (bus_name, _device), device_points in grouped.items():
+        base_address = min(point.address for point in device_points)
         explicit_ids = {
             point.modbus_slave_id
             for point in device_points
@@ -407,7 +394,7 @@ def _resolve_modbus_slave_ids(points: list[PointConfig], buses: list[BusConfig])
         else:
             bus = bus_by_name[bus_name]
             assert bus.modbus_slave_base is not None
-            resolved_id = bus.modbus_slave_base + device_points[0].device - 1
+            resolved_id = base_address
         for point in device_points:
             point.modbus_slave_id = resolved_id
 
@@ -448,7 +435,23 @@ def _default_telemetry_config() -> dict[str, object]:
 
 def _default_health_config() -> dict[str, object]:
     return {
-        "stale_after_cycles": 3,
         "fault_after_failures": 10,
         "recovery_poll_interval_cycles": 5,
     }
+
+
+def _load_health_config(raw_health: object) -> HealthConfig:
+    payload = dict(_default_health_config())
+    if isinstance(raw_health, dict):
+        payload.update(
+            {
+                "fault_after_failures": raw_health.get(
+                    "fault_after_failures", payload["fault_after_failures"]
+                ),
+                "recovery_poll_interval_cycles": raw_health.get(
+                    "recovery_poll_interval_cycles",
+                    payload["recovery_poll_interval_cycles"],
+                ),
+            }
+        )
+    return HealthConfig(**payload)

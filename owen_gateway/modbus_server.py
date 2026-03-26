@@ -17,6 +17,8 @@ class _StoreAdapter:
     context: object
 
     def write(self, slave_id: int, point: PointConfig, value: object) -> None:
+        if not point.publish_to_modbus:
+            return
         self.write_value(
             slave_id,
             point.register_type,
@@ -93,6 +95,7 @@ class ModbusPublisher:
         telemetry: TelemetryConfig,
         points: list[PointConfig],
         extra_slave_ids: list[int] | None = None,
+        extra_holding_registers: list[int] | None = None,
     ) -> None:
         self.modbus = modbus
         self.status = status
@@ -100,6 +103,7 @@ class ModbusPublisher:
         self.points = points
         self._server_task: asyncio.Task[None] | None = None
         self._store = None
+        self._extra_holding_registers = extra_holding_registers or []
         self._slave_ids = sorted(
             {point.modbus_slave_id for point in points}.union(extra_slave_ids or [])
         )
@@ -123,6 +127,7 @@ class ModbusPublisher:
             self.status,
             self.telemetry,
             {"holding_register", "input_register"},
+            self._extra_holding_registers,
         )
         contexts = {
             slave_id: ModbusSlaveContext(
@@ -255,10 +260,11 @@ def _calc_size(
     status: StatusConfig,
     telemetry: TelemetryConfig,
     register_types: set[str],
+    extra_registers: list[int] | None = None,
 ) -> int:
     max_index = 1
     for point in points:
-        if point.register_type in register_types:
+        if point.publish_to_modbus and point.register_type in register_types:
             width = 1 if point.modbus_data_type in {"bool", "uint16", "int16"} else 2
             max_index = max(max_index, point.modbus_address + width + 1)
             if point.time_mark_address is not None:
@@ -277,4 +283,6 @@ def _calc_size(
             telemetry.protocol_error_counter_address + 2,
             telemetry.poll_cycle_counter_address + 2,
         )
+    for address in extra_registers or []:
+        max_index = max(max_index, address + 2)
     return max_index

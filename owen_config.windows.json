@@ -70,7 +70,9 @@
       "protocol_format": "float32",
       "register_type": "holding_register",
       "modbus_address": 16,
-      "modbus_data_type": "float32"
+      "modbus_data_type": "float32",
+      "time_mark_address": 32,
+      "channel_status_address": 40
     },
     {
       "name": "trm138_bus1_dev1_ch2",
@@ -81,7 +83,9 @@
       "protocol_format": "float32",
       "register_type": "holding_register",
       "modbus_address": 18,
-      "modbus_data_type": "float32"
+      "modbus_data_type": "float32",
+      "time_mark_address": 33,
+      "channel_status_address": 41
     },
     {
       "name": "trm138_bus1_dev1_ch3",
@@ -92,7 +96,9 @@
       "protocol_format": "float32",
       "register_type": "holding_register",
       "modbus_address": 20,
-      "modbus_data_type": "float32"
+      "modbus_data_type": "float32",
+      "time_mark_address": 34,
+      "channel_status_address": 42
     },
     {
       "name": "trm138_bus1_dev1_ch4",
@@ -103,7 +109,9 @@
       "protocol_format": "float32",
       "register_type": "holding_register",
       "modbus_address": 22,
-      "modbus_data_type": "float32"
+      "modbus_data_type": "float32",
+      "time_mark_address": 35,
+      "channel_status_address": 43
     },
     {
       "name": "trm138_bus1_dev1_ch5",
@@ -114,7 +122,9 @@
       "protocol_format": "float32",
       "register_type": "holding_register",
       "modbus_address": 24,
-      "modbus_data_type": "float32"
+      "modbus_data_type": "float32",
+      "time_mark_address": 36,
+      "channel_status_address": 44
     },
     {
       "name": "trm138_bus1_dev1_ch6",
@@ -125,7 +135,9 @@
       "protocol_format": "float32",
       "register_type": "holding_register",
       "modbus_address": 26,
-      "modbus_data_type": "float32"
+      "modbus_data_type": "float32",
+      "time_mark_address": 37,
+      "channel_status_address": 45
     },
     {
       "name": "trm138_bus1_dev1_ch7",
@@ -136,7 +148,9 @@
       "protocol_format": "float32",
       "register_type": "holding_register",
       "modbus_address": 28,
-      "modbus_data_type": "float32"
+      "modbus_data_type": "float32",
+      "time_mark_address": 38,
+      "channel_status_address": 46
     },
     {
       "name": "trm138_bus1_dev1_ch8",
@@ -147,183 +161,217 @@
       "protocol_format": "float32",
       "register_type": "holding_register",
       "modbus_address": 30,
-      "modbus_data_type": "float32"
+      "modbus_data_type": "float32",
+      "time_mark_address": 39,
+      "channel_status_address": 47
     },
     {
       "name": "trm138_bus2_dev1_ch1",
       "bus": "bus2",
       "device": 1,
-      "address": 96,
+      "address": 48,
       "parameter": "rEAd",
       "protocol_format": "float32",
       "register_type": "holding_register",
-      "modbus_address": 144,
-      "modbus_data_type": "float32"
+      "modbus_address": 16,
+      "modbus_data_type": "float32",
+      "time_mark_address": 32,
+      "channel_status_address": 40
     },
     {
       "name": "trm138_bus2_dev1_ch2",
       "bus": "bus2",
       "device": 1,
-      "address": 97,
+      "address": 49,
       "parameter": "rEAd",
       "protocol_format": "float32",
       "register_type": "holding_register",
-      "modbus_address": 146,
-      "modbus_data_type": "float32"
+      "modbus_address": 18,
+      "modbus_data_type": "float32",
+      "time_mark_address": 33,
+      "channel_status_address": 41
     },
     {
       "name": "trm138_bus2_dev1_ch3",
       "bus": "bus2",
       "device": 1,
-      "address": 98,
+      "address": 50,
       "parameter": "rEAd",
       "protocol_format": "float32",
       "register_type": "holding_register",
-      "modbus_address": 148,
-      "modbus_data_type": "float32"
+      "modbus_address": 20,
+      "modbus_data_type": "float32",
+      "time_mark_address": 34,
+      "channel_status_address": 42
     },
     {
       "name": "trm138_bus2_dev1_ch4",
       "bus": "bus2",
       "device": 1,
-      "address": 99,
+      "address": 51,
       "parameter": "rEAd",
       "protocol_format": "float32",
       "register_type": "holding_register",
-      "modbus_address": 150,
-      "modbus_data_type": "float32"
+      "modbus_address": 22,
+      "modbus_data_type": "float32",
+      "time_mark_address": 35,
+      "channel_status_address": 43
     },
     {
       "name": "trm138_bus2_dev1_ch5",
       "bus": "bus2",
       "device": 1,
-      "address": 100,
+      "address": 52,
       "parameter": "rEAd",
       "protocol_format": "float32",
       "register_type": "holding_register",
-      "modbus_address": 152,
-      "modbus_data_type": "float32"
+      "modbus_address": 24,
+      "modbus_data_type": "float32",
+      "time_mark_address": 36,
+      "channel_status_address": 44
     },
     {
       "name": "trm138_bus2_dev1_ch6",
       "bus": "bus2",
       "device": 1,
-      "address": 101,
+      "address": 53,
       "parameter": "rEAd",
       "protocol_format": "float32",
       "register_type": "holding_register",
-      "modbus_address": 154,
-      "modbus_data_type": "float32"
+      "modbus_address": 26,
+      "modbus_data_type": "float32",
+      "time_mark_address": 37,
+      "channel_status_address": 45
     },
     {
       "name": "trm138_bus2_dev1_ch7",
       "bus": "bus2",
       "device": 1,
-      "address": 102,
+      "address": 54,
       "parameter": "rEAd",
       "protocol_format": "float32",
       "register_type": "holding_register",
-      "modbus_address": 156,
-      "modbus_data_type": "float32"
+      "modbus_address": 28,
+      "modbus_data_type": "float32",
+      "time_mark_address": 38,
+      "channel_status_address": 46
     },
     {
       "name": "trm138_bus2_dev1_ch8",
       "bus": "bus2",
       "device": 1,
-      "address": 103,
+      "address": 55,
       "parameter": "rEAd",
       "protocol_format": "float32",
       "register_type": "holding_register",
-      "modbus_address": 158,
-      "modbus_data_type": "float32"
+      "modbus_address": 30,
+      "modbus_data_type": "float32",
+      "time_mark_address": 39,
+      "channel_status_address": 47
     },
     {
       "name": "trm138_bus3_dev1_ch1",
       "bus": "bus3",
       "device": 1,
-      "address": 96,
+      "address": 144,
       "parameter": "rEAd",
       "protocol_format": "float32",
       "register_type": "holding_register",
-      "modbus_address": 272,
-      "modbus_data_type": "float32"
+      "modbus_address": 16,
+      "modbus_data_type": "float32",
+      "time_mark_address": 32,
+      "channel_status_address": 40
     },
     {
       "name": "trm138_bus3_dev1_ch2",
       "bus": "bus3",
       "device": 1,
-      "address": 97,
+      "address": 145,
       "parameter": "rEAd",
       "protocol_format": "float32",
       "register_type": "holding_register",
-      "modbus_address": 274,
-      "modbus_data_type": "float32"
+      "modbus_address": 18,
+      "modbus_data_type": "float32",
+      "time_mark_address": 33,
+      "channel_status_address": 41
     },
     {
       "name": "trm138_bus3_dev1_ch3",
       "bus": "bus3",
       "device": 1,
-      "address": 98,
+      "address": 146,
       "parameter": "rEAd",
       "protocol_format": "float32",
       "register_type": "holding_register",
-      "modbus_address": 276,
-      "modbus_data_type": "float32"
+      "modbus_address": 20,
+      "modbus_data_type": "float32",
+      "time_mark_address": 34,
+      "channel_status_address": 42
     },
     {
       "name": "trm138_bus3_dev1_ch4",
       "bus": "bus3",
       "device": 1,
-      "address": 99,
+      "address": 147,
       "parameter": "rEAd",
       "protocol_format": "float32",
       "register_type": "holding_register",
-      "modbus_address": 278,
-      "modbus_data_type": "float32"
+      "modbus_address": 22,
+      "modbus_data_type": "float32",
+      "time_mark_address": 35,
+      "channel_status_address": 43
     },
     {
       "name": "trm138_bus3_dev1_ch5",
       "bus": "bus3",
       "device": 1,
-      "address": 100,
+      "address": 148,
       "parameter": "rEAd",
       "protocol_format": "float32",
       "register_type": "holding_register",
-      "modbus_address": 280,
-      "modbus_data_type": "float32"
+      "modbus_address": 24,
+      "modbus_data_type": "float32",
+      "time_mark_address": 36,
+      "channel_status_address": 44
     },
     {
       "name": "trm138_bus3_dev1_ch6",
       "bus": "bus3",
       "device": 1,
-      "address": 101,
+      "address": 149,
       "parameter": "rEAd",
       "protocol_format": "float32",
       "register_type": "holding_register",
-      "modbus_address": 282,
-      "modbus_data_type": "float32"
+      "modbus_address": 26,
+      "modbus_data_type": "float32",
+      "time_mark_address": 37,
+      "channel_status_address": 45
     },
     {
       "name": "trm138_bus3_dev1_ch7",
       "bus": "bus3",
       "device": 1,
-      "address": 102,
+      "address": 150,
       "parameter": "rEAd",
       "protocol_format": "float32",
       "register_type": "holding_register",
-      "modbus_address": 284,
-      "modbus_data_type": "float32"
+      "modbus_address": 28,
+      "modbus_data_type": "float32",
+      "time_mark_address": 38,
+      "channel_status_address": 46
     },
     {
       "name": "trm138_bus3_dev1_ch8",
       "bus": "bus3",
       "device": 1,
-      "address": 103,
+      "address": 151,
       "parameter": "rEAd",
       "protocol_format": "float32",
       "register_type": "holding_register",
-      "modbus_address": 286,
-      "modbus_data_type": "float32"
+      "modbus_address": 30,
+      "modbus_data_type": "float32",
+      "time_mark_address": 39,
+      "channel_status_address": 47
     }
   ]
 }

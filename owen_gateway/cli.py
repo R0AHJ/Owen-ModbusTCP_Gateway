@@ -49,7 +49,7 @@ def build_config_parser() -> argparse.ArgumentParser:
 
     line_parser = subparsers.add_parser("set-line", help="create or update serial line")
     line_parser.add_argument("--config", default="owen_config.json", help="path to config json")
-    line_parser.add_argument("--line", type=int, required=True, help="line number 1..4")
+    line_parser.add_argument("--line", type=int, required=True, help="line number 1..2")
     line_parser.add_argument("--port", required=True, help="serial port, for example COM6")
     line_parser.add_argument("--baudrate", type=int, required=True, help="serial baudrate")
     line_parser.add_argument("--bytesize", type=int, default=8, choices=[7, 8], help="serial bytesize")
@@ -62,36 +62,36 @@ def build_config_parser() -> argparse.ArgumentParser:
 
     trm_parser = subparsers.add_parser("add-trm138", help="add TRM138 points to selected line")
     trm_parser.add_argument("--config", default="owen_config.json", help="path to config json")
-    trm_parser.add_argument("--line", type=int, required=True, help="line number 1..4")
+    trm_parser.add_argument("--line", type=int, required=True, help="line number 1..2")
     trm_parser.add_argument("--base-address", type=int, required=True, help="TRM138 base OVEN address")
     trm_parser.add_argument(
         "--channels",
         default="1-8",
         help='channels to poll, for example "1-8" or "1,2,5"',
     )
-    trm_parser.add_argument("--tag", required=True, help="service tag prefix for generated point names")
+    trm_parser.add_argument("--tag", help="legacy alias, ignored for generated point names")
 
     list_parser = subparsers.add_parser("list-config", help="print configured lines and devices")
     list_parser.add_argument("--config", default="owen_config.json", help="path to config json")
 
     show_line_parser = subparsers.add_parser("list-line", help="print devices on selected line")
     show_line_parser.add_argument("--config", default="owen_config.json", help="path to config json")
-    show_line_parser.add_argument("--line", type=int, required=True, help="line number 1..4")
+    show_line_parser.add_argument("--line", type=int, required=True, help="line number 1..2")
 
     show_trm_parser = subparsers.add_parser("show-trm138", help="print selected TRM138 details")
     show_trm_parser.add_argument("--config", default="owen_config.json", help="path to config json")
-    show_trm_parser.add_argument("--line", type=int, required=True, help="line number 1..4")
+    show_trm_parser.add_argument("--line", type=int, required=True, help="line number 1..2")
     show_trm_parser.add_argument("--device", type=int, help="device number on line")
     show_trm_parser.add_argument("--base-address", type=int, help="TRM138 base OVEN address")
     show_trm_parser.add_argument("--tag", help="service tag")
 
     remove_line_parser = subparsers.add_parser("remove-line", help="remove line and all its devices")
     remove_line_parser.add_argument("--config", default="owen_config.json", help="path to config json")
-    remove_line_parser.add_argument("--line", type=int, required=True, help="line number 1..4")
+    remove_line_parser.add_argument("--line", type=int, required=True, help="line number 1..2")
 
     remove_trm_parser = subparsers.add_parser("remove-trm138", help="remove TRM138 from selected line")
     remove_trm_parser.add_argument("--config", default="owen_config.json", help="path to config json")
-    remove_trm_parser.add_argument("--line", type=int, required=True, help="line number 1..4")
+    remove_trm_parser.add_argument("--line", type=int, required=True, help="line number 1..2")
     remove_trm_parser.add_argument("--device", type=int, help="device number on line")
     remove_trm_parser.add_argument("--base-address", type=int, help="TRM138 base OVEN address")
     remove_trm_parser.add_argument("--tag", help="service tag")
@@ -101,7 +101,7 @@ def build_config_parser() -> argparse.ArgumentParser:
         help="change polled channels for existing TRM138",
     )
     update_trm_parser.add_argument("--config", default="owen_config.json", help="path to config json")
-    update_trm_parser.add_argument("--line", type=int, required=True, help="line number 1..4")
+    update_trm_parser.add_argument("--line", type=int, required=True, help="line number 1..2")
     update_trm_parser.add_argument("--channels", required=True, help='channels, for example "1-6,8"')
     update_trm_parser.add_argument("--device", type=int, help="device number on line")
     update_trm_parser.add_argument("--base-address", type=int, help="TRM138 base OVEN address")
@@ -164,8 +164,7 @@ def _run_config_tool(argv: list[str]) -> int:
             "updated line "
             f"{bus_payload['name']}: port={bus_payload['serial']['port']} "
             f"baudrate={bus_payload['serial']['baudrate']} "
-            f"parity={bus_payload['serial']['parity']} "
-            f"slave_base={bus_payload['modbus_slave_base']}"
+            f"parity={bus_payload['serial']['parity']}"
         )
         print(f"generated map: {map_path}")
         return 0
@@ -182,7 +181,7 @@ def _run_config_tool(argv: list[str]) -> int:
         map_path = write_generated_modbus_map(args.config, payload)
         print(
             "added TRM138 "
-            f"{result['tag']} on {result['bus']} "
+            f"on {result['bus']} "
             f"device={result['device']} base_address={result['base_address']} "
             f"channels={result['channels']}"
         )
@@ -236,7 +235,7 @@ def _run_config_tool(argv: list[str]) -> int:
         map_path = write_generated_modbus_map(args.config, payload)
         print(
             "removed TRM138 "
-            f"{result['tag']} on {result['bus']} "
+            f"on {result['bus']} "
             f"device={result['device']} base_address={result['base_address']} "
             f"points={result['removed_points']}"
         )
@@ -261,7 +260,7 @@ def _run_config_tool(argv: list[str]) -> int:
         map_path = write_generated_modbus_map(args.config, payload)
         print(
             "updated TRM138 channels "
-            f"{result['tag']} on {result['bus']} "
+            f"on {result['bus']} "
             f"device={result['device']} base_address={result['base_address']} "
             f"channels={result['channels']}"
         )
@@ -301,11 +300,11 @@ def _run_config_menu(config_path: str) -> int:
                 _pause_menu()
                 continue
             if choice == "2":
-                line = int(input("Line number (1..4): ").strip())
+                line = int(input("Line number (1..2): ").strip())
                 _run_line_submenu(config_path, line)
                 continue
             if choice == "3":
-                line = int(input("Line number (1..4): ").strip())
+                line = int(input("Line number (1..2): ").strip())
                 port = input("Serial port: ").strip()
                 baudrate = int(input("Baudrate [9600]: ").strip() or "9600")
                 bytesize = int(input("Bytesize [8]: ").strip() or "8")
@@ -329,19 +328,17 @@ def _run_config_menu(config_path: str) -> int:
                     modbus_slave_base=int(slave_base_raw) if slave_base_raw else None,
                 )
             elif choice == "4":
-                line = int(input("Line number (1..4): ").strip())
+                line = int(input("Line number (1..2): ").strip())
                 base_address = int(input("Base OVEN address: ").strip())
                 channels = parse_channels(input("Channels [1-8]: ").strip() or "1-8")
-                tag = input("Tag: ").strip()
                 add_trm138_device(
                     payload,
                     line=line,
                     base_address=base_address,
                     channels=channels,
-                    tag=tag,
                 )
             elif choice == "5":
-                line = int(input("Line number (1..4): ").strip())
+                line = int(input("Line number (1..2): ").strip())
                 confirm = input(f"Remove line{line} and all devices? [y/N]: ").strip().lower()
                 if confirm == "y":
                     remove_line(payload, line=line)
@@ -491,13 +488,11 @@ def _run_line_submenu(config_path: str, line: int) -> None:
             elif choice == "4":
                 base_address = int(input("Base OVEN address: ").strip())
                 channels = parse_channels(input("Channels [1-8]: ").strip() or "1-8")
-                tag = input("Tag: ").strip()
                 add_trm138_device(
                     payload,
                     line=line,
                     base_address=base_address,
                     channels=channels,
-                    tag=tag,
                 )
             elif choice == "0":
                 return

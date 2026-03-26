@@ -39,7 +39,6 @@ def _base_config() -> dict[str, object]:
             "poll_cycle_counter_address": 6,
         },
         "health": {
-            "stale_after_cycles": 3,
             "fault_after_failures": 10,
             "recovery_poll_interval_cycles": 5,
         },
@@ -56,7 +55,7 @@ class ConfigTests(unittest.TestCase):
         finally:
             os.unlink(temp_path)
 
-    def test_modbus_slave_id_defaults_to_bus_base_plus_device_index(self) -> None:
+    def test_modbus_slave_id_defaults_to_device_base_address(self) -> None:
         payload = _base_config()
         payload["points"] = [
             {
@@ -75,7 +74,7 @@ class ConfigTests(unittest.TestCase):
 
         config = self._load(payload)
 
-        self.assertEqual(config.points[0].modbus_slave_id, 12)
+        self.assertEqual(config.points[0].modbus_slave_id, 96)
 
     def test_same_register_map_is_allowed_on_different_slave_ids(self) -> None:
         payload = _base_config()
@@ -83,7 +82,7 @@ class ConfigTests(unittest.TestCase):
             {
                 "name": "dev1_ch1",
                 "device": 1,
-                "modbus_slave_id": 10,
+                "modbus_slave_id": 96,
                 "address": 96,
                 "parameter": "rEAd",
                 "protocol_format": "float32",
@@ -96,7 +95,7 @@ class ConfigTests(unittest.TestCase):
             {
                 "name": "dev2_ch1",
                 "device": 2,
-                "modbus_slave_id": 11,
+                "modbus_slave_id": 196,
                 "address": 196,
                 "parameter": "rEAd",
                 "protocol_format": "float32",
@@ -110,9 +109,9 @@ class ConfigTests(unittest.TestCase):
 
         config = self._load(payload)
 
-        self.assertEqual([point.modbus_slave_id for point in config.points], [10, 11])
+        self.assertEqual([point.modbus_slave_id for point in config.points], [96, 196])
 
-    def test_modbus_slave_id_uses_bus_base_for_second_line(self) -> None:
+    def test_modbus_slave_id_uses_device_base_address_for_each_line(self) -> None:
         payload = _base_config()
         payload.pop("serial")
         payload.pop("poll_interval_ms")
@@ -151,7 +150,7 @@ class ConfigTests(unittest.TestCase):
                 "name": "line1_ch1",
                 "bus": "line1",
                 "device": 1,
-                "address": 48,
+                "address": 96,
                 "parameter": "rEAd",
                 "protocol_format": "float32",
                 "register_type": "holding_register",
@@ -162,7 +161,7 @@ class ConfigTests(unittest.TestCase):
                 "name": "line1_ch2",
                 "bus": "line1",
                 "device": 1,
-                "address": 49,
+                "address": 97,
                 "parameter": "rEAd",
                 "protocol_format": "float32",
                 "register_type": "holding_register",
@@ -196,10 +195,102 @@ class ConfigTests(unittest.TestCase):
         config = self._load(payload)
 
         slave_ids = {point.name: point.modbus_slave_id for point in config.points}
-        self.assertEqual(slave_ids["line1_ch1"], 10)
-        self.assertEqual(slave_ids["line1_ch2"], 10)
-        self.assertEqual(slave_ids["line2_ch1"], 50)
-        self.assertEqual(slave_ids["line2_ch2"], 50)
+        self.assertEqual(slave_ids["line1_ch1"], 96)
+        self.assertEqual(slave_ids["line1_ch2"], 96)
+        self.assertEqual(slave_ids["line2_ch1"], 48)
+        self.assertEqual(slave_ids["line2_ch2"], 48)
+
+    def test_explicit_modbus_slave_id_is_preserved_for_sparse_channels(self) -> None:
+        payload = _base_config()
+        payload["points"] = [
+            {
+                "name": "dev1_ch1",
+                "device": 1,
+                "modbus_slave_id": 96,
+                "address": 102,
+                "parameter": "rEAd",
+                "protocol_format": "float32",
+                "register_type": "holding_register",
+                "modbus_address": 28,
+                "modbus_data_type": "float32",
+            }
+        ]
+
+        config = self._load(payload)
+
+        self.assertEqual(config.points[0].modbus_slave_id, 96)
+
+    def test_parameter_index_is_loaded_and_validated(self) -> None:
+        payload = _base_config()
+        payload["points"] = [
+            {
+                "name": "dev1_lu1_setpoint",
+                "device": 1,
+                "address": 96,
+                "parameter": "C.SP",
+                "parameter_index": 0,
+                "protocol_format": "stored_dot",
+                "register_type": "holding_register",
+                "modbus_address": 100,
+                "modbus_data_type": "float32",
+            }
+        ]
+
+        config = self._load(payload)
+
+        self.assertEqual(config.points[0].parameter_index, 0)
+
+    def test_internal_point_can_be_excluded_from_modbus_publication(self) -> None:
+        payload = _base_config()
+        payload["points"] = [
+            {
+                "name": "dev1_ch1",
+                "device": 1,
+                "address": 96,
+                "parameter": "rEAd",
+                "protocol_format": "float32",
+                "register_type": "holding_register",
+                "modbus_address": 16,
+                "modbus_data_type": "float32",
+                "channel_status_address": 40,
+            },
+            {
+                "name": "dev1_ch1_al_t_internal",
+                "device": 1,
+                "address": 96,
+                "parameter": "AL.t",
+                "protocol_format": "uint16",
+                "register_type": "holding_register",
+                "modbus_address": 0,
+                "modbus_data_type": "uint16",
+                "publish_to_modbus": False,
+            },
+        ]
+
+        config = self._load(payload)
+
+        self.assertFalse(config.points[1].publish_to_modbus)
+
+    def test_legacy_stale_after_cycles_is_ignored(self) -> None:
+        payload = _base_config()
+        payload["health"]["stale_after_cycles"] = 99
+        payload["points"] = [
+            {
+                "name": "ch1",
+                "device": 1,
+                "address": 96,
+                "parameter": "rEAd",
+                "protocol_format": "float32",
+                "register_type": "holding_register",
+                "modbus_address": 16,
+                "modbus_data_type": "float32",
+            }
+        ]
+
+        config = self._load(payload)
+
+        self.assertEqual(config.health.fault_after_failures, 10)
+        self.assertEqual(config.health.recovery_poll_interval_cycles, 5)
 
     def test_duplicate_modbus_slave_id_for_different_devices_is_rejected(self) -> None:
         payload = _base_config()
@@ -207,7 +298,7 @@ class ConfigTests(unittest.TestCase):
             {
                 "name": "dev1_ch1",
                 "device": 1,
-                "modbus_slave_id": 10,
+                "modbus_slave_id": 96,
                 "address": 96,
                 "parameter": "rEAd",
                 "protocol_format": "float32",
@@ -218,8 +309,8 @@ class ConfigTests(unittest.TestCase):
             {
                 "name": "dev2_ch1",
                 "device": 2,
-                "modbus_slave_id": 10,
-                "address": 196,
+                "modbus_slave_id": 96,
+                "address": 96,
                 "parameter": "rEAd",
                 "protocol_format": "float32",
                 "register_type": "holding_register",
@@ -228,7 +319,7 @@ class ConfigTests(unittest.TestCase):
             },
         ]
 
-        with self.assertRaisesRegex(ValueError, "duplicate modbus_slave_id 10"):
+        with self.assertRaisesRegex(ValueError, "duplicate modbus_slave_id 96"):
             self._load(payload)
 
     def test_linux_example_config_loads(self) -> None:
