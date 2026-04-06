@@ -44,6 +44,36 @@ def register_width(data_type: str) -> int:
     raise ValueError(f"unsupported data_type: {data_type}")
 
 
+def decode_registers(registers: list[int], data_type: str) -> object:
+    # Modbus writes arrive as 16-bit registers and must be converted back into
+    # the same Python value shapes that encode_registers() accepts.
+    if data_type == "bool":
+        if len(registers) != 1:
+            raise ValueError(f"bool requires 1 register, got {len(registers)}")
+        return bool(registers[0])
+    if data_type == "uint16":
+        if len(registers) != 1:
+            raise ValueError(f"uint16 requires 1 register, got {len(registers)}")
+        return registers[0]
+    if data_type == "int16":
+        if len(registers) != 1:
+            raise ValueError(f"int16 requires 1 register, got {len(registers)}")
+        value = registers[0]
+        if value >= 0x8000:
+            value -= 0x10000
+        return value
+    if data_type in {"uint32", "int32", "float32"}:
+        if len(registers) != 2:
+            raise ValueError(f"{data_type} requires 2 registers, got {len(registers)}")
+        raw = registers[0].to_bytes(2, "big") + registers[1].to_bytes(2, "big")
+        if data_type == "uint32":
+            return struct.unpack(">I", raw)[0]
+        if data_type == "int32":
+            return struct.unpack(">i", raw)[0]
+        return struct.unpack(">f", raw)[0]
+    raise ValueError(f"unsupported data_type: {data_type}")
+
+
 def _split_words(data: bytes) -> list[int]:
     # 32-bit values are published as two consecutive Modbus holding registers
     # in network byte order, matching the layout used throughout the gateway.

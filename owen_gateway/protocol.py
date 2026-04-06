@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import struct
 from dataclasses import dataclass
+from decimal import Decimal
 
 
 START_MARKER = b"#"
@@ -31,6 +32,25 @@ def build_read_frame(
     frame = OwenFrame(
         address=address,
         request=True,
+        parameter_hash=hash_parameter_name(parameter_name),
+        payload=payload,
+    )
+    return encode_frame(frame)
+
+
+def build_write_frame(
+    address: int,
+    parameter_name: str,
+    payload: bytes,
+    parameter_index: int | None = None,
+) -> bytes:
+    if parameter_index is not None:
+        if not 0 <= parameter_index <= 0xFFFF:
+            raise ValueError(f"parameter_index out of range: {parameter_index}")
+        payload = payload + parameter_index.to_bytes(2, "big")
+    frame = OwenFrame(
+        address=address,
+        request=False,
         parameter_hash=hash_parameter_name(parameter_name),
         payload=payload,
     )
@@ -148,6 +168,36 @@ def decode_payload(payload: bytes, protocol_format: str) -> object:
     raise ValueError(f"unsupported protocol_format: {protocol_format}")
 
 
+def encode_payload(value: object, protocol_format: str) -> bytes:
+    if protocol_format == "float32":
+        return struct.pack(">f", float(value))
+    if protocol_format == "int16":
+        ivalue = int(value)
+        if not -0x8000 <= ivalue <= 0x7FFF:
+            raise ValueError(f"int16 out of range: {ivalue}")
+        return struct.pack(">h", ivalue)
+    if protocol_format == "stored_dot":
+        # STORED_DOT keeps sign, decimal exponent and mantissa in a compact
+        # variable-width field, so writes should reuse the same layout family
+        # that devices return on reads.
+        return _encode_stored_dot(float(value))
+    if protocol_format == "uint16":
+        ivalue = int(value)
+        if not 0 <= ivalue <= 0xFFFF:
+            raise ValueError(f"uint16 out of range: {ivalue}")
+        return struct.pack(">H", ivalue)
+    if protocol_format == "uint32":
+        ivalue = int(value)
+        if not 0 <= ivalue <= 0xFFFFFFFF:
+            raise ValueError(f"uint32 out of range: {ivalue}")
+        return struct.pack(">I", ivalue)
+    if protocol_format == "raw":
+        if not isinstance(value, (bytes, bytearray)):
+            raise ValueError("raw payload must be bytes-like")
+        return bytes(value)
+    raise ValueError(f"unsupported protocol_format: {protocol_format}")
+
+
 def hash_parameter_name(name: str) -> int:
     normalized = _normalize_name(name)
     if not 1 <= len(normalized) <= 4:
@@ -211,6 +261,29 @@ def _hash_byte(byte: int, bit_count: int, crc: int) -> int:
             crc = (crc << 1) & 0xFFFF
         byte = (byte << 1) & 0xFF
     return crc
+
+
+def _encode_stored_dot(value: float) -> bytes:
+    float_value = float(value)
+    if float_value.is_integer():
+        normalized = Decimal(format(float_value, ".1f"))
+    else:
+        normalized = Decimal(format(float_value, ".7g"))
+    sign, digits, exponent = normalized.as_tuple()
+    mantissa = int("".join(map(str, digits))) if digits else 0
+    exponent = abs(exponent)
+    if exponent > 0x07:
+        raise ValueError(f"stored_dot exponent out of range: {exponent}")
+
+    if mantissa < 0x10:
+        raw = (sign << 7) | (exponent << 4) | mantissa
+        return bytes([raw])
+    if mantissa < 0x1000:
+        raw = (sign << 15) | (exponent << 12) | mantissa
+        return raw.to_bytes(2, "big")
+    if mantissa < 0x10000:
+        return bytes([(sign << 7) | (exponent << 4)]) + mantissa.to_bytes(2, "big")
+    raise ValueError(f"stored_dot mantissa out of range: {mantissa}")
 
 
 def _encode_body(frame: OwenFrame) -> bytes:

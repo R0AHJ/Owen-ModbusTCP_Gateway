@@ -35,7 +35,7 @@
   },
   "points": [
     {
-      "name": "trm138_dev1_ch1",
+      "name": "trm138_addr96_ch1_read",
       "device": 1,
       "modbus_slave_id": 96,
       "address": 96,
@@ -48,7 +48,31 @@
       "channel_status_address": 40
     },
     {
-      "name": "trm138_dev1_ch2",
+      "name": "trm138_addr96_ch1_sp",
+      "device": 1,
+      "modbus_slave_id": 96,
+      "address": 96,
+      "parameter": "C.SP",
+      "protocol_format": "stored_dot",
+      "register_type": "holding_register",
+      "modbus_address": 56,
+      "modbus_data_type": "float32",
+      "writable": true
+    },
+    {
+      "name": "trm138_addr96_ch1_alt_internal",
+      "device": 1,
+      "modbus_slave_id": 96,
+      "address": 96,
+      "parameter": "AL.t",
+      "protocol_format": "uint16",
+      "register_type": "holding_register",
+      "modbus_address": 0,
+      "modbus_data_type": "uint16",
+      "publish_to_modbus": false
+    },
+    {
+      "name": "trm138_addr96_ch2_read",
       "device": 1,
       "modbus_slave_id": 96,
       "address": 97,
@@ -61,7 +85,31 @@
       "channel_status_address": 41
     },
     {
-      "name": "trm138_dev1_ch3",
+      "name": "trm138_addr96_ch2_sp",
+      "device": 1,
+      "modbus_slave_id": 96,
+      "address": 97,
+      "parameter": "C.SP",
+      "protocol_format": "stored_dot",
+      "register_type": "holding_register",
+      "modbus_address": 58,
+      "modbus_data_type": "float32",
+      "writable": true
+    },
+    {
+      "name": "trm138_addr96_ch2_alt_internal",
+      "device": 1,
+      "modbus_slave_id": 96,
+      "address": 97,
+      "parameter": "AL.t",
+      "protocol_format": "uint16",
+      "register_type": "holding_register",
+      "modbus_address": 0,
+      "modbus_data_type": "uint16",
+      "publish_to_modbus": false
+    },
+    {
+      "name": "trm138_addr96_ch3_read",
       "device": 1,
       "modbus_slave_id": 96,
       "address": 98,
@@ -74,7 +122,31 @@
       "channel_status_address": 42
     },
     {
-      "name": "trm138_dev1_ch4",
+      "name": "trm138_addr96_ch3_sp",
+      "device": 1,
+      "modbus_slave_id": 96,
+      "address": 98,
+      "parameter": "C.SP",
+      "protocol_format": "stored_dot",
+      "register_type": "holding_register",
+      "modbus_address": 60,
+      "modbus_data_type": "float32",
+      "writable": true
+    },
+    {
+      "name": "trm138_addr96_ch3_alt_internal",
+      "device": 1,
+      "modbus_slave_id": 96,
+      "address": 98,
+      "parameter": "AL.t",
+      "protocol_format": "uint16",
+      "register_type": "holding_register",
+      "modbus_address": 0,
+      "modbus_data_type": "uint16",
+      "publish_to_modbus": false
+    },
+    {
+      "name": "trm138_addr96_ch4_read",
       "device": 1,
       "modbus_slave_id": 96,
       "address": 99,
@@ -87,7 +159,31 @@
       "channel_status_address": 43
     },
     {
-      "name": "trm138_dev1_ch5",
+      "name": "trm138_addr96_ch4_sp",
+      "device": 1,
+      "modbus_slave_id": 96,
+      "address": 99,
+      "parameter": "C.SP",
+      "protocol_format": "stored_dot",
+      "register_type": "holding_register",
+      "modbus_address": 62,
+      "modbus_data_type": "float32",
+      "writable": true
+    },
+    {
+      "name": "trm138_addr96_ch4_alt_internal",
+      "device": 1,
+      "modbus_slave_id": 96,
+      "address": 99,
+      "parameter": "AL.t",
+      "protocol_format": "uint16",
+      "register_type": "holding_register",
+      "modbus_address": 0,
+      "modbus_data_type": "uint16",
+      "publish_to_modbus": false
+    },
+    {
+      "name": "trm138_addr96_ch5_read",
       "device": 1,
       "modbus_slave_id": 96,
       "address": 100,
@@ -100,7 +196,31 @@
       "channel_status_address": 44
     },
     {
-      "name": "trm138_dev1_ch6",
+      "name": "trm138_addr96_ch5_sp",
+      "device": 1,
+      "modbus_slave_id": 96,
+      "address": 100,
+      "parameter": "C.SP",
+      "protocol_format": "stored_dot",
+      "register_type": "holding_register",
+      "modbus_address": 64,
+      "modbus_data_type": "float32",
+      "writable": true
+    },
+    {
+      "name": "trm138_addr96_ch5_alt_internal",
+      "device": 1,
+      "modbus_slave_id": 96,
+      "address": 100,
+      "parameter": "AL.t",
+      "protocol_format": "uint16",
+      "register_type": "holding_register",
+      "modbus_address": 0,
+      "modbus_data_type": "uint16",
+      "publish_to_modbus": false
+    },
+    {
+      "name": "trm138_addr96_ch6_read",
       "device": 1,
       "modbus_slave_id": 96,
       "address": 101,
@@ -113,7 +233,31 @@
       "channel_status_address": 45
     },
     {
-      "name": "trm138_dev1_ch7",
+      "name": "trm138_addr96_ch6_sp",
+      "device": 1,
+      "modbus_slave_id": 96,
+      "address": 101,
+      "parameter": "C.SP",
+      "protocol_format": "stored_dot",
+      "register_type": "holding_register",
+      "modbus_address": 66,
+      "modbus_data_type": "float32",
+      "writable": true
+    },
+    {
+      "name": "trm138_addr96_ch6_alt_internal",
+      "device": 1,
+      "modbus_slave_id": 96,
+      "address": 101,
+      "parameter": "AL.t",
+      "protocol_format": "uint16",
+      "register_type": "holding_register",
+      "modbus_address": 0,
+      "modbus_data_type": "uint16",
+      "publish_to_modbus": false
+    },
+    {
+      "name": "trm138_addr96_ch7_read",
       "device": 1,
       "modbus_slave_id": 96,
       "address": 102,
@@ -126,7 +270,31 @@
       "channel_status_address": 46
     },
     {
-      "name": "trm138_dev1_ch8",
+      "name": "trm138_addr96_ch7_sp",
+      "device": 1,
+      "modbus_slave_id": 96,
+      "address": 102,
+      "parameter": "C.SP",
+      "protocol_format": "stored_dot",
+      "register_type": "holding_register",
+      "modbus_address": 68,
+      "modbus_data_type": "float32",
+      "writable": true
+    },
+    {
+      "name": "trm138_addr96_ch7_alt_internal",
+      "device": 1,
+      "modbus_slave_id": 96,
+      "address": 102,
+      "parameter": "AL.t",
+      "protocol_format": "uint16",
+      "register_type": "holding_register",
+      "modbus_address": 0,
+      "modbus_data_type": "uint16",
+      "publish_to_modbus": false
+    },
+    {
+      "name": "trm138_addr96_ch8_read",
       "device": 1,
       "modbus_slave_id": 96,
       "address": 103,
@@ -139,7 +307,31 @@
       "channel_status_address": 47
     },
     {
-      "name": "trm138_dev2_ch1",
+      "name": "trm138_addr96_ch8_sp",
+      "device": 1,
+      "modbus_slave_id": 96,
+      "address": 103,
+      "parameter": "C.SP",
+      "protocol_format": "stored_dot",
+      "register_type": "holding_register",
+      "modbus_address": 70,
+      "modbus_data_type": "float32",
+      "writable": true
+    },
+    {
+      "name": "trm138_addr96_ch8_alt_internal",
+      "device": 1,
+      "modbus_slave_id": 96,
+      "address": 103,
+      "parameter": "AL.t",
+      "protocol_format": "uint16",
+      "register_type": "holding_register",
+      "modbus_address": 0,
+      "modbus_data_type": "uint16",
+      "publish_to_modbus": false
+    },
+    {
+      "name": "trm138_addr104_ch1_read",
       "device": 2,
       "modbus_slave_id": 104,
       "address": 104,
@@ -152,7 +344,31 @@
       "channel_status_address": 40
     },
     {
-      "name": "trm138_dev2_ch2",
+      "name": "trm138_addr104_ch1_sp",
+      "device": 2,
+      "modbus_slave_id": 104,
+      "address": 104,
+      "parameter": "C.SP",
+      "protocol_format": "stored_dot",
+      "register_type": "holding_register",
+      "modbus_address": 56,
+      "modbus_data_type": "float32",
+      "writable": true
+    },
+    {
+      "name": "trm138_addr104_ch1_alt_internal",
+      "device": 2,
+      "modbus_slave_id": 104,
+      "address": 104,
+      "parameter": "AL.t",
+      "protocol_format": "uint16",
+      "register_type": "holding_register",
+      "modbus_address": 0,
+      "modbus_data_type": "uint16",
+      "publish_to_modbus": false
+    },
+    {
+      "name": "trm138_addr104_ch2_read",
       "device": 2,
       "modbus_slave_id": 104,
       "address": 105,
@@ -165,7 +381,31 @@
       "channel_status_address": 41
     },
     {
-      "name": "trm138_dev2_ch3",
+      "name": "trm138_addr104_ch2_sp",
+      "device": 2,
+      "modbus_slave_id": 104,
+      "address": 105,
+      "parameter": "C.SP",
+      "protocol_format": "stored_dot",
+      "register_type": "holding_register",
+      "modbus_address": 58,
+      "modbus_data_type": "float32",
+      "writable": true
+    },
+    {
+      "name": "trm138_addr104_ch2_alt_internal",
+      "device": 2,
+      "modbus_slave_id": 104,
+      "address": 105,
+      "parameter": "AL.t",
+      "protocol_format": "uint16",
+      "register_type": "holding_register",
+      "modbus_address": 0,
+      "modbus_data_type": "uint16",
+      "publish_to_modbus": false
+    },
+    {
+      "name": "trm138_addr104_ch3_read",
       "device": 2,
       "modbus_slave_id": 104,
       "address": 106,
@@ -178,7 +418,31 @@
       "channel_status_address": 42
     },
     {
-      "name": "trm138_dev2_ch4",
+      "name": "trm138_addr104_ch3_sp",
+      "device": 2,
+      "modbus_slave_id": 104,
+      "address": 106,
+      "parameter": "C.SP",
+      "protocol_format": "stored_dot",
+      "register_type": "holding_register",
+      "modbus_address": 60,
+      "modbus_data_type": "float32",
+      "writable": true
+    },
+    {
+      "name": "trm138_addr104_ch3_alt_internal",
+      "device": 2,
+      "modbus_slave_id": 104,
+      "address": 106,
+      "parameter": "AL.t",
+      "protocol_format": "uint16",
+      "register_type": "holding_register",
+      "modbus_address": 0,
+      "modbus_data_type": "uint16",
+      "publish_to_modbus": false
+    },
+    {
+      "name": "trm138_addr104_ch4_read",
       "device": 2,
       "modbus_slave_id": 104,
       "address": 107,
@@ -191,7 +455,31 @@
       "channel_status_address": 43
     },
     {
-      "name": "trm138_dev2_ch5",
+      "name": "trm138_addr104_ch4_sp",
+      "device": 2,
+      "modbus_slave_id": 104,
+      "address": 107,
+      "parameter": "C.SP",
+      "protocol_format": "stored_dot",
+      "register_type": "holding_register",
+      "modbus_address": 62,
+      "modbus_data_type": "float32",
+      "writable": true
+    },
+    {
+      "name": "trm138_addr104_ch4_alt_internal",
+      "device": 2,
+      "modbus_slave_id": 104,
+      "address": 107,
+      "parameter": "AL.t",
+      "protocol_format": "uint16",
+      "register_type": "holding_register",
+      "modbus_address": 0,
+      "modbus_data_type": "uint16",
+      "publish_to_modbus": false
+    },
+    {
+      "name": "trm138_addr104_ch5_read",
       "device": 2,
       "modbus_slave_id": 104,
       "address": 108,
@@ -204,7 +492,31 @@
       "channel_status_address": 44
     },
     {
-      "name": "trm138_dev2_ch6",
+      "name": "trm138_addr104_ch5_sp",
+      "device": 2,
+      "modbus_slave_id": 104,
+      "address": 108,
+      "parameter": "C.SP",
+      "protocol_format": "stored_dot",
+      "register_type": "holding_register",
+      "modbus_address": 64,
+      "modbus_data_type": "float32",
+      "writable": true
+    },
+    {
+      "name": "trm138_addr104_ch5_alt_internal",
+      "device": 2,
+      "modbus_slave_id": 104,
+      "address": 108,
+      "parameter": "AL.t",
+      "protocol_format": "uint16",
+      "register_type": "holding_register",
+      "modbus_address": 0,
+      "modbus_data_type": "uint16",
+      "publish_to_modbus": false
+    },
+    {
+      "name": "trm138_addr104_ch6_read",
       "device": 2,
       "modbus_slave_id": 104,
       "address": 109,
@@ -217,7 +529,31 @@
       "channel_status_address": 45
     },
     {
-      "name": "trm138_dev2_ch7",
+      "name": "trm138_addr104_ch6_sp",
+      "device": 2,
+      "modbus_slave_id": 104,
+      "address": 109,
+      "parameter": "C.SP",
+      "protocol_format": "stored_dot",
+      "register_type": "holding_register",
+      "modbus_address": 66,
+      "modbus_data_type": "float32",
+      "writable": true
+    },
+    {
+      "name": "trm138_addr104_ch6_alt_internal",
+      "device": 2,
+      "modbus_slave_id": 104,
+      "address": 109,
+      "parameter": "AL.t",
+      "protocol_format": "uint16",
+      "register_type": "holding_register",
+      "modbus_address": 0,
+      "modbus_data_type": "uint16",
+      "publish_to_modbus": false
+    },
+    {
+      "name": "trm138_addr104_ch7_read",
       "device": 2,
       "modbus_slave_id": 104,
       "address": 110,
@@ -230,7 +566,31 @@
       "channel_status_address": 46
     },
     {
-      "name": "trm138_dev2_ch8",
+      "name": "trm138_addr104_ch7_sp",
+      "device": 2,
+      "modbus_slave_id": 104,
+      "address": 110,
+      "parameter": "C.SP",
+      "protocol_format": "stored_dot",
+      "register_type": "holding_register",
+      "modbus_address": 68,
+      "modbus_data_type": "float32",
+      "writable": true
+    },
+    {
+      "name": "trm138_addr104_ch7_alt_internal",
+      "device": 2,
+      "modbus_slave_id": 104,
+      "address": 110,
+      "parameter": "AL.t",
+      "protocol_format": "uint16",
+      "register_type": "holding_register",
+      "modbus_address": 0,
+      "modbus_data_type": "uint16",
+      "publish_to_modbus": false
+    },
+    {
+      "name": "trm138_addr104_ch8_read",
       "device": 2,
       "modbus_slave_id": 104,
       "address": 111,
@@ -241,6 +601,30 @@
       "modbus_data_type": "float32",
       "time_mark_address": 39,
       "channel_status_address": 47
+    },
+    {
+      "name": "trm138_addr104_ch8_sp",
+      "device": 2,
+      "modbus_slave_id": 104,
+      "address": 111,
+      "parameter": "C.SP",
+      "protocol_format": "stored_dot",
+      "register_type": "holding_register",
+      "modbus_address": 70,
+      "modbus_data_type": "float32",
+      "writable": true
+    },
+    {
+      "name": "trm138_addr104_ch8_alt_internal",
+      "device": 2,
+      "modbus_slave_id": 104,
+      "address": 111,
+      "parameter": "AL.t",
+      "protocol_format": "uint16",
+      "register_type": "holding_register",
+      "modbus_address": 0,
+      "modbus_data_type": "uint16",
+      "publish_to_modbus": false
     }
   ]
 }

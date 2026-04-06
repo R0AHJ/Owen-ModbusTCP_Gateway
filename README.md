@@ -16,6 +16,7 @@ The gateway communicates with field devices only through the OVEN protocol on
 - service status and telemetry registers
 - `rEAd` value publication with `time mark`
 - `TRM138` parameter decoding for `C.SP`, `HYSt`, `AL.t`
+- Modbus write-through for writable `C.SP` points with readback verification
 - logical unit state mask in `HR48`
 
 ## Runtime Model
@@ -60,7 +61,6 @@ For each device:
 - channel statuses: `HR40..HR47`
 - LU mask: `HR48`
 - `C.SP`: `HR56..HR71`
-- `HYSt`: `HR58..HR73`
 
 Channel status codes:
 
@@ -85,7 +85,7 @@ Supported OVEN parameters:
 
 Important:
 
-- `C.SP`, `HYSt`, `AL.t` are read by channel address, like `rEAd`
+- `C.SP` and `AL.t` are read by channel address, like `rEAd`
 - `C.SP` uses OVEN `stored_dot` encoding
 - both `2`-byte and `3`-byte `stored_dot` payloads are supported
 
@@ -107,6 +107,10 @@ The gateway calculates `HR48` from:
 
 `AL.t` is polled as internal-only data for every configured channel and is not
 published to Modbus directly.
+
+Current template configs publish `C.SP` for write access. `HYSt` remains
+supported by the protocol layer but is not exposed in the ready-to-run example
+configs.
 
 Supported `AL.t` modes:
 

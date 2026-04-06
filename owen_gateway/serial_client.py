@@ -4,6 +4,7 @@ from owen_gateway.config import SerialConfig
 from owen_gateway.protocol import (
     OwenFrame,
     build_read_frame,
+    build_write_frame,
     decode_frame,
     expand_network_address,
 )
@@ -64,6 +65,38 @@ class OwenSerialClient:
             )
         return request, response, decode_frame(response)
 
+    def exchange_write(
+        self,
+        address: int,
+        parameter_name: str,
+        payload: bytes,
+        parameter_index: int | None = None,
+    ) -> tuple[bytes, bytes, OwenFrame | None]:
+        if self._serial is None:
+            raise RuntimeError("serial client is not connected")
+
+        request = build_write_frame(
+            expand_network_address(address, self.config.address_bits),
+            parameter_name,
+            payload,
+            parameter_index,
+        )
+        self._serial.reset_input_buffer()
+        self._serial.write(request)
+        self._serial.flush()
+        response = self._serial.read_until(b"\r")
+        if not response:
+            raise TimeoutError(
+                f"no write response from OVEN device address={address} parameter={parameter_name}"
+            )
+        try:
+            return request, response, decode_frame(response)
+        except ValueError:
+            # Some TRM138 write operations return a short control-style
+            # acknowledgement instead of a regular framed payload. Keep the
+            # raw response and let the service validate by readback polling.
+            return request, response, None
+
     def read_parameter(
         self,
         address: int,
@@ -73,6 +106,21 @@ class OwenSerialClient:
         _request, _response, frame = self.exchange(
             address,
             parameter_name,
+            parameter_index,
+        )
+        return frame
+
+    def write_parameter(
+        self,
+        address: int,
+        parameter_name: str,
+        payload: bytes,
+        parameter_index: int | None = None,
+    ) -> OwenFrame | None:
+        _request, _response, frame = self.exchange_write(
+            address,
+            parameter_name,
+            payload,
             parameter_index,
         )
         return frame

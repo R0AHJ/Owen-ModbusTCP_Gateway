@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 from dataclasses import dataclass
+from typing import Callable
 
 from owen_gateway.config import (
     ModbusConfig,
@@ -72,20 +74,73 @@ class _StoreAdapter:
         value: object,
     ) -> None:
         encoded = encode_registers(value, data_type)
+        self.write_raw_values(slave_id, register_type, address, encoded)
+
+    def write_raw_values(
+        self,
+        slave_id: int,
+        register_type: str,
+        address: int,
+        values: list[int],
+    ) -> None:
         slave = self.context[slave_id]
         if register_type == "coil":
-            slave.setValues(0x01, address, [bool(v) for v in encoded])
+            slave.setValues(0x01, address, [bool(v) for v in values])
             return
         if register_type == "discrete_input":
-            slave.setValues(0x02, address, [bool(v) for v in encoded])
+            slave.setValues(0x02, address, [bool(v) for v in values])
             return
         if register_type == "holding_register":
-            slave.setValues(0x03, address, encoded)
+            _set_slave_values(slave, "h", address, values)
             return
         if register_type == "input_register":
-            slave.setValues(0x04, address, encoded)
+            slave.setValues(0x04, address, values)
             return
         raise ValueError(f"unsupported register_type: {register_type}")
+
+
+class _ObservableDataBlock:
+    def __init__(
+        self,
+        base_block: object,
+        *,
+        write_callback: Callable[[int, list[int], list[int]], None] | None = None,
+    ) -> None:
+        self._base_block = base_block
+        self._write_callback = write_callback
+        self._callbacks_suspended = False
+
+    @property
+    def address(self) -> int:
+        return self._base_block.address
+
+    @property
+    def values(self) -> list[int]:
+        return self._base_block.values
+
+    def validate(self, address: int, count: int = 1) -> bool:
+        return self._base_block.validate(address, count)
+
+    def getValues(self, address: int, count: int = 1) -> list[int]:
+        return self._base_block.getValues(address, count)
+
+    def setValues(self, address: int, values: list[int]) -> None:
+        old_values = list(self._base_block.getValues(address, len(values)))
+        self._base_block.setValues(address, values)
+        if self._write_callback is not None and not self._callbacks_suspended:
+            result = self._write_callback(address, list(values), old_values)
+            if inspect.isawaitable(result):
+                asyncio.get_running_loop().create_task(result)
+
+    def setValues_internal(self, address: int, values: list[int]) -> None:
+        self._callbacks_suspended = True
+        try:
+            self._base_block.setValues(address, values)
+        finally:
+            self._callbacks_suspended = False
+
+    def reset(self) -> None:
+        self._base_block.reset()
 
 
 class ModbusPublisher:
@@ -98,6 +153,10 @@ class ModbusPublisher:
         points: list[PointConfig],
         extra_slave_ids: list[int] | None = None,
         extra_holding_registers: list[int] | None = None,
+        holding_register_write_handler: Callable[
+            [int, int, list[int], list[int]], None
+        ]
+        | None = None,
     ) -> None:
         self.modbus = modbus
         self.status = status
@@ -106,6 +165,7 @@ class ModbusPublisher:
         self._server_task: asyncio.Task[None] | None = None
         self._store = None
         self._extra_holding_registers = extra_holding_registers or []
+        self._holding_register_write_handler = holding_register_write_handler
         self._slave_ids = sorted(
             {point.modbus_slave_id for point in points}.union(extra_slave_ids or [])
         )
@@ -140,6 +200,19 @@ class ModbusPublisher:
             )
             for slave_id in self._slave_ids
         }
+        if self._holding_register_write_handler is not None:
+            for slave_id, slave_context in contexts.items():
+                slave_context.store["h"] = _ObservableDataBlock(
+                    slave_context.store["h"],
+                    write_callback=lambda address, values, old_values, slave_id=slave_id: (
+                        self._holding_register_write_handler(
+                            slave_id,
+                            address - 1,
+                            values,
+                            old_values,
+                        )
+                    ),
+                )
         self._store = _StoreAdapter(ModbusServerContext(slaves=contexts, single=False))
         self._server_task = asyncio.create_task(
             StartAsyncTcpServer(
@@ -175,6 +248,16 @@ class ModbusPublisher:
         if self._store is None:
             raise RuntimeError("Modbus server is not started")
         self._store.write_value(slave_id, register_type, address, data_type, value)
+
+    def restore_holding_registers(
+        self,
+        slave_id: int,
+        address: int,
+        values: list[int],
+    ) -> None:
+        if self._store is None:
+            raise RuntimeError("Modbus server is not started")
+        self._store.write_raw_values(slave_id, "holding_register", address, values)
 
     def publish_point_metadata(
         self,
@@ -290,3 +373,11 @@ def _calc_size(
     for address in extra_registers or []:
         max_index = max(max_index, address + 2)
     return max_index
+
+
+def _set_slave_values(slave: object, store_key: str, address: int, values: list[int]) -> None:
+    block = slave.store[store_key]
+    if hasattr(block, "setValues_internal"):
+        block.setValues_internal(address + 1, values)
+        return
+    slave.setValues(0x03, address, values)

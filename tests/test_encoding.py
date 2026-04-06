@@ -1,7 +1,7 @@
 import struct
 import unittest
 
-from owen_gateway.encoding import encode_registers, register_width
+from owen_gateway.encoding import decode_registers, encode_registers, register_width
 
 
 class EncodingTests(unittest.TestCase):
@@ -26,6 +26,14 @@ class EncodingTests(unittest.TestCase):
     def test_register_width(self) -> None:
         self.assertEqual(register_width("bool"), 1)
         self.assertEqual(register_width("float32"), 2)
+
+    def test_decode_registers(self) -> None:
+        self.assertEqual(decode_registers([0xFFFF], "int16"), -1)
+        self.assertEqual(decode_registers([0x1234, 0x5678], "uint32"), 0x12345678)
+        self.assertAlmostEqual(
+            decode_registers(encode_registers(1.5, "float32"), "float32"),
+            1.5,
+        )
 
 
 if __name__ == "__main__":

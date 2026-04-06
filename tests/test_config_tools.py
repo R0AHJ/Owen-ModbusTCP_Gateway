@@ -63,12 +63,12 @@ class ConfigToolsTests(unittest.TestCase):
 
         self.assertEqual(result["device"], 1)
         points = payload["points"]
-        self.assertEqual(len(points), 12)
+        self.assertEqual(len(points), 9)
         self.assertEqual(points[0]["name"], "a96_ch1_read_R16")
         self.assertEqual(points[0]["modbus_address"], 16)
         self.assertEqual(points[1]["modbus_address"], 56)
-        self.assertEqual(points[8]["address"], 103)
-        self.assertEqual(points[8]["modbus_address"], 30)
+        self.assertEqual(points[6]["address"], 103)
+        self.assertEqual(points[6]["modbus_address"], 30)
 
     def test_add_trm138_device_uses_next_free_device_number(self) -> None:
         payload = load_config_document("missing-test-config.json")
@@ -191,8 +191,8 @@ class ConfigToolsTests(unittest.TestCase):
         details = render_device_details(payload, line=1, base_address=96)
 
         self.assertIn("SlaveID: 96", details)
-        self.assertIn("| `1` | `96` | `HR16..HR17` | `HR40` | `HR56..HR57` | `HR58..HR59` |", details)
-        self.assertIn("| `2` | `97` | `HR18..HR19` | `HR41` | `HR62..HR63` | `HR64..HR65` |", details)
+        self.assertIn("| `1` | `96` | `HR16..HR17` | `HR40` | `HR56..HR57` |", details)
+        self.assertIn("| `2` | `97` | `HR18..HR19` | `HR41` | `HR58..HR59` |", details)
 
     def test_get_line_devices_returns_device_inventory(self) -> None:
         payload = load_config_document("missing-test-config.json")
@@ -246,7 +246,7 @@ class ConfigToolsTests(unittest.TestCase):
         self.assertIn("Service `SlaveID`: `1`", content)
         self.assertIn("## line2", content)
         self.assertIn("| `1` | `48` | `48` | `CH1,CH2` |", content)
-        self.assertIn("| `1` | `48` | `HR16..HR17` | `HR40` | `HR56..HR57` | `HR58..HR59` |", content)
+        self.assertIn("| `1` | `48` | `HR16..HR17` | `HR40` | `HR56..HR57` |", content)
         self.assertIn("| `HR48` | LU state mask, bit0..bit7 -> LU1..LU8 |", content)
 
     def test_export_config_document_writes_json_and_map(self) -> None:
@@ -299,8 +299,8 @@ class ConfigToolsTests(unittest.TestCase):
         result = remove_trm138_device(payload, line=1, base_address=96)
 
         self.assertEqual(result["device"], 1)
-        self.assertEqual(result["removed_points"], 8)
-        self.assertEqual(len(payload["points"]), 4)
+        self.assertEqual(result["removed_points"], 6)
+        self.assertEqual(len(payload["points"]), 3)
         self.assertEqual(payload["points"][0]["name"], "a48_ch1_read_R16")
 
     def test_remove_line_deletes_bus_and_points(self) -> None:
@@ -332,9 +332,9 @@ class ConfigToolsTests(unittest.TestCase):
 
         result = remove_line(payload, line=2)
 
-        self.assertEqual(result["removed_points"], 8)
+        self.assertEqual(result["removed_points"], 6)
         self.assertEqual([bus["name"] for bus in payload["buses"]], ["line1"])
-        self.assertEqual(len(payload["points"]), 4)
+        self.assertEqual(len(payload["points"]), 3)
         self.assertEqual(payload["points"][0]["bus"], "line1")
 
     def test_update_trm138_channels_keeps_device_and_changes_points(self) -> None:
@@ -401,7 +401,7 @@ class ConfigToolsTests(unittest.TestCase):
         self.assertIn("base_address=96", summary)
         self.assertIn("channels=CH7", summary)
         self.assertIn("Base address: 96", details)
-        self.assertIn("| `7` | `102` | `HR28..HR29` | `HR46` | `HR92..HR93` | `HR94..HR95` |", details)
+        self.assertIn("| `7` | `102` | `HR28..HR29` | `HR46` | `HR68..HR69` |", details)
 
 
 def load_config_from_payload(payload: dict[str, object]):

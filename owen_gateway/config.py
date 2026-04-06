@@ -105,6 +105,7 @@ class PointConfig:
     modbus_address: int
     modbus_data_type: str
     publish_to_modbus: bool = True
+    writable: bool = False
     time_mark_address: int | None = None
     channel_status_address: int | None = None
 
@@ -256,6 +257,18 @@ def validate_config(config: OwenGatewayConfig) -> None:
             raise ValueError(
                 f"unsupported modbus_data_type for {point.name}: {point.modbus_data_type}"
             )
+        if point.writable:
+            if not point.publish_to_modbus:
+                raise ValueError(f"writable point must be published to Modbus: {point.name}")
+            if point.register_type != "holding_register":
+                raise ValueError(
+                    f"writable point must use holding_register: {point.name}"
+                )
+            if not _is_writable_type_compatible(point.protocol_format, point.modbus_data_type):
+                raise ValueError(
+                    "writable point has incompatible protocol/modbus types for "
+                    f"{point.name}: {point.protocol_format} -> {point.modbus_data_type}"
+                )
         if point.modbus_address < 0:
             raise ValueError(f"modbus_address must be >= 0 for {point.name}")
         if point.time_mark_address is not None and point.time_mark_address < 0:
@@ -366,6 +379,8 @@ def _load_point(entry: dict[str, object], buses: list[BusConfig]) -> PointConfig
         point_data["parameter_index"] = None
     if "publish_to_modbus" not in point_data:
         point_data["publish_to_modbus"] = True
+    if "writable" not in point_data:
+        point_data["writable"] = False
     return PointConfig(**point_data)
 
 
@@ -410,6 +425,16 @@ def _validate_serial_config(bus_name: str, serial: SerialConfig) -> None:
         raise ValueError(f"bus {bus_name}: serial.timeout_ms must be > 0")
     if serial.address_bits not in {8, 11}:
         raise ValueError(f"bus {bus_name}: serial.address_bits must be 8 or 11")
+
+
+def _is_writable_type_compatible(protocol_format: str, modbus_data_type: str) -> bool:
+    return {
+        ("float32", "float32"),
+        ("stored_dot", "float32"),
+        ("int16", "int16"),
+        ("uint16", "uint16"),
+        ("uint32", "uint32"),
+    }.__contains__((protocol_format, modbus_data_type))
 
 
 def _default_status_config() -> dict[str, object]:

@@ -4,9 +4,11 @@ import unittest
 from owen_gateway.protocol import (
     OwenFrame,
     build_read_frame,
+    build_write_frame,
     crc16,
     decode_frame,
     decode_payload,
+    encode_payload,
     encode_frame,
     hash_parameter_name,
 )
@@ -34,6 +36,14 @@ class OwenProtocolTests(unittest.TestCase):
         self.assertTrue(frame.request)
         self.assertEqual(frame.parameter_hash, hash_parameter_name("C.SP"))
         self.assertEqual(frame.payload, bytes.fromhex("0003"))
+
+    def test_encode_and_decode_write_frame(self) -> None:
+        raw = build_write_frame(16, "C.SP", bytes.fromhex("13E8"), 3)
+        frame = decode_frame(raw)
+        self.assertEqual(frame.address, 16)
+        self.assertFalse(frame.request)
+        self.assertEqual(frame.parameter_hash, hash_parameter_name("C.SP"))
+        self.assertEqual(frame.payload, bytes.fromhex("13E80003"))
 
     def test_encode_and_decode_response_frame(self) -> None:
         payload = struct.pack(">f", 12.5)
@@ -80,6 +90,15 @@ class OwenProtocolTests(unittest.TestCase):
     def test_decode_stored_dot_three_byte_fractional_value(self) -> None:
         self.assertEqual(decode_payload(bytes.fromhex("2024EA"), "stored_dot"), 94.5)
         self.assertEqual(decode_payload(bytes.fromhex("20251C"), "stored_dot"), 95.0)
+
+    def test_encode_stored_dot_matches_known_device_examples(self) -> None:
+        self.assertEqual(encode_payload(-10.38, "stored_dot"), bytes([164, 14]))
+        self.assertEqual(encode_payload(350.0, "stored_dot"), bytes([29, 172]))
+        self.assertEqual(encode_payload(410.0, "stored_dot"), bytes([16, 16, 4]))
+        self.assertEqual(encode_payload(0.0, "stored_dot"), bytes([16]))
+
+    def test_encode_stored_dot_tolerates_float32_rounding_noise(self) -> None:
+        self.assertEqual(encode_payload(1.100000023841858, "stored_dot"), bytes([0x1B]))
 
 
 if __name__ == "__main__":

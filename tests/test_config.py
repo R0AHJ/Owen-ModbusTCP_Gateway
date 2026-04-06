@@ -270,6 +270,65 @@ class ConfigTests(unittest.TestCase):
 
         self.assertFalse(config.points[1].publish_to_modbus)
 
+    def test_writable_point_is_loaded(self) -> None:
+        payload = _base_config()
+        payload["points"] = [
+            {
+                "name": "dev1_ch1_sp",
+                "device": 1,
+                "address": 96,
+                "parameter": "C.SP",
+                "protocol_format": "stored_dot",
+                "register_type": "holding_register",
+                "modbus_address": 56,
+                "modbus_data_type": "float32",
+                "writable": True,
+            }
+        ]
+
+        config = self._load(payload)
+
+        self.assertTrue(config.points[0].writable)
+
+    def test_writable_internal_point_is_rejected(self) -> None:
+        payload = _base_config()
+        payload["points"] = [
+            {
+                "name": "dev1_ch1_al_t_internal",
+                "device": 1,
+                "address": 96,
+                "parameter": "AL.t",
+                "protocol_format": "uint16",
+                "register_type": "holding_register",
+                "modbus_address": 0,
+                "modbus_data_type": "uint16",
+                "publish_to_modbus": False,
+                "writable": True,
+            }
+        ]
+
+        with self.assertRaisesRegex(ValueError, "writable point must be published"):
+            self._load(payload)
+
+    def test_writable_type_mismatch_is_rejected(self) -> None:
+        payload = _base_config()
+        payload["points"] = [
+            {
+                "name": "dev1_ch1_sp",
+                "device": 1,
+                "address": 96,
+                "parameter": "C.SP",
+                "protocol_format": "stored_dot",
+                "register_type": "holding_register",
+                "modbus_address": 56,
+                "modbus_data_type": "uint16",
+                "writable": True,
+            }
+        ]
+
+        with self.assertRaisesRegex(ValueError, "incompatible protocol/modbus types"):
+            self._load(payload)
+
     def test_legacy_stale_after_cycles_is_ignored(self) -> None:
         payload = _base_config()
         payload["health"]["stale_after_cycles"] = 99

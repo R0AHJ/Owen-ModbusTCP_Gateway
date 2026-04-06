@@ -10,8 +10,9 @@ from owen_gateway.config import (
     PointConfig,
     SERVICE_SLAVE_ID,
 )
+from owen_gateway.encoding import decode_registers, register_width
 from owen_gateway.modbus_server import ModbusPublisher
-from owen_gateway.protocol import decode_payload, hash_parameter_name
+from owen_gateway.protocol import decode_payload, encode_payload, hash_parameter_name
 from owen_gateway.serial_client import OwenSerialClient
 
 
@@ -36,6 +37,9 @@ CHANNEL_FAILED = 4
 SERVICE_LINE_STATUS_BASE = 10
 LOGIC_UNIT_MASK_REGISTER = 48
 LOGIC_UNIT_COUNT = 8
+WRITE_VERIFY_ATTEMPTS = 3
+WRITE_VERIFY_DELAY_SECONDS = 0.35
+FLOAT_VERIFY_TOLERANCE = 0.051
 
 
 @dataclass(slots=True)
@@ -62,8 +66,10 @@ class OwenGatewayService:
         self.serial_clients = {
             bus.name: OwenSerialClient(bus.serial) for bus in config.buses
         }
+        self.bus_locks = {bus.name: asyncio.Lock() for bus in config.buses}
         self.buses = {bus.name: bus for bus in config.buses}
         self.points_by_bus = _group_points_by_bus_device(config.points)
+        self.writable_points = _group_writable_points(config.points)
         self.modbus = ModbusPublisher(
             modbus=config.modbus,
             status=config.status,
@@ -71,6 +77,7 @@ class OwenGatewayService:
             points=config.points,
             extra_slave_ids=[SERVICE_SLAVE_ID],
             extra_holding_registers=[LOGIC_UNIT_MASK_REGISTER],
+            holding_register_write_handler=self._handle_modbus_holding_write,
         )
         self.point_states = {point.name: PointState() for point in config.points}
         self.point_values: dict[str, object | None] = {
@@ -193,12 +200,13 @@ class OwenGatewayService:
                     continue
                 frame = None
                 try:
-                    request, response, frame = await asyncio.to_thread(
-                        self.serial_clients[bus.name].exchange,
-                        point.address,
-                        point.parameter,
-                        point.parameter_index,
-                    )
+                    async with self.bus_locks[bus.name]:
+                        request, response, frame = await asyncio.to_thread(
+                            self.serial_clients[bus.name].exchange,
+                            point.address,
+                            point.parameter,
+                            point.parameter_index,
+                        )
                     if self.config.diagnostics:
                         self.logger.info(
                             "diag bus=%s slave=%s point=%s request=%s response=%s",
@@ -501,6 +509,135 @@ class OwenGatewayService:
         )
         self.device_logic_masks[device_key] = mask
 
+    async def _handle_modbus_holding_write(
+        self,
+        slave_id: int,
+        address: int,
+        values: list[int],
+        previous_values: list[int],
+    ) -> None:
+        point = self.writable_points.get((slave_id, address, len(values)))
+        if point is None:
+            self.modbus.restore_holding_registers(slave_id, address, previous_values)
+            self.logger.warning(
+                "rejected Modbus write slave=%s address=%s count=%s",
+                slave_id,
+                address,
+                len(values),
+            )
+            return
+
+        try:
+            value = decode_registers(values, point.modbus_data_type)
+            payload = encode_payload(value, point.protocol_format)
+            async with self.bus_locks[point.bus]:
+                request, response, frame = await asyncio.to_thread(
+                    self.serial_clients[point.bus].exchange_write,
+                    point.address,
+                    point.parameter,
+                    payload,
+                    point.parameter_index,
+                )
+                verified_value = await self._verify_written_value_locked(point, value)
+            if frame is not None:
+                if frame.request:
+                    raise RuntimeError(
+                        f"invalid write response for {point.name}: request flag is set in response"
+                    )
+                expected_hash = hash_parameter_name(point.parameter)
+                if frame.parameter_hash != expected_hash:
+                    raise RuntimeError(
+                        f"invalid write response for {point.name}: hash mismatch "
+                        f"0x{frame.parameter_hash:04X} != 0x{expected_hash:04X}"
+                    )
+                if frame.payload == b"":
+                    raise RuntimeError(f"empty write response for {point.name}")
+            elif self.config.diagnostics:
+                self.logger.info(
+                    "write returned short opaque ack bus=%s slave=%s point=%s response=%s",
+                    point.bus,
+                    slave_id,
+                    point.name,
+                    response.hex(" "),
+                )
+
+            self.point_values[point.name] = verified_value
+            self.point_states[point.name].consecutive_failures = 0
+            self.point_states[point.name].channel_status = CHANNEL_OK
+            self.modbus.publish(slave_id, point, verified_value)
+            self.modbus.publish_point_metadata(
+                slave_id,
+                point,
+                channel_status=CHANNEL_OK,
+            )
+            self._publish_logic_unit_masks(
+                point.bus,
+                slave_id,
+                self.points_by_bus[point.bus][slave_id],
+            )
+            if self.config.diagnostics:
+                self.logger.info(
+                    "write ok bus=%s slave=%s point=%s value=%r request=%s response=%s",
+                    point.bus,
+                    slave_id,
+                    point.name,
+                    verified_value,
+                    request.hex(" "),
+                    response.hex(" "),
+                )
+        except TimeoutError:
+            self.modbus.restore_holding_registers(slave_id, address, previous_values)
+            self.logger.warning(
+                "timeout writing bus=%s slave=%s point=%s address=%s parameter=%s",
+                point.bus,
+                slave_id,
+                point.name,
+                point.address,
+                point.parameter,
+            )
+        except Exception:
+            self.modbus.restore_holding_registers(slave_id, address, previous_values)
+            self.logger.exception(
+                "write failed bus=%s slave=%s point=%s address=%s parameter=%s",
+                point.bus,
+                slave_id,
+                point.name,
+                point.address,
+                point.parameter,
+            )
+
+    async def _verify_written_value_locked(
+        self,
+        point: PointConfig,
+        expected_value: object,
+    ) -> object:
+        last_error: Exception | None = None
+        for attempt in range(1, WRITE_VERIFY_ATTEMPTS + 1):
+            if attempt > 1:
+                await asyncio.sleep(WRITE_VERIFY_DELAY_SECONDS)
+            try:
+                _request, _response, frame = await asyncio.to_thread(
+                    self.serial_clients[point.bus].exchange,
+                    point.address,
+                    point.parameter,
+                    point.parameter_index,
+                )
+                if frame.request:
+                    raise RuntimeError(
+                        f"verify response for {point.name} has request flag set"
+                    )
+                value = decode_payload(frame.payload, point.protocol_format)
+                if _values_match(expected_value, value):
+                    return value
+                raise RuntimeError(
+                    f"verify mismatch for {point.name}: expected={expected_value!r} actual={value!r}"
+                )
+            except Exception as exc:
+                last_error = exc
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError(f"write verification failed for {point.name}")
+
 
 def _inc_counter(value: int) -> int:
     return (value + 1) & 0xFFFF
@@ -525,6 +662,17 @@ def _group_points_by_bus_device(
     grouped: dict[str, dict[int, list[PointConfig]]] = {}
     for point in points:
         grouped.setdefault(point.bus, {}).setdefault(point.modbus_slave_id, []).append(point)
+    return grouped
+
+
+def _group_writable_points(
+    points: list[PointConfig],
+) -> dict[tuple[int, int, int], PointConfig]:
+    grouped: dict[tuple[int, int, int], PointConfig] = {}
+    for point in points:
+        if not point.writable:
+            continue
+        grouped[(point.modbus_slave_id, point.modbus_address, register_width(point.modbus_data_type))] = point
     return grouped
 
 
@@ -608,3 +756,9 @@ def _failure_status(
         point_state.recovery_skip_cycles = recovery_poll_interval_cycles - 1
         return CHANNEL_FAILED
     return transient_status
+
+
+def _values_match(expected: object, actual: object) -> bool:
+    if isinstance(expected, float) or isinstance(actual, float):
+        return abs(float(expected) - float(actual)) <= FLOAT_VERIFY_TOLERANCE
+    return expected == actual

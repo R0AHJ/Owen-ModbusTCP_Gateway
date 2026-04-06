@@ -25,8 +25,6 @@ TRM138_TIME_MARK_BASE = TRM138_REGISTER_BASE + (
 )
 TRM138_STATUS_BASE = TRM138_TIME_MARK_BASE + TRM138_CHANNEL_COUNT
 TRM138_SETPOINT_BASE = 56
-TRM138_HYST_BASE = 58
-TRM138_PARAMETER_BLOCK = 6
 
 
 def load_config_document(path: str | Path) -> dict[str, object]:
@@ -120,16 +118,15 @@ def render_device_details(
         f"SlaveID: {selected['slave_id']}",
         f"Base address: {selected['base_address']}",
         "",
-        "| Channel | OVEN Address | Read | Status | C.SP | HYSt |",
-        "|---|---:|---|---:|---|---|",
+        "| Channel | OVEN Address | Read | Status | C.SP |",
+        "|---|---:|---|---:|---|",
     ]
     for row in selected["channel_rows"]:
         lines.append(
             f"| `{row['channel']}` | `{row['address']}` | "
             f"`HR{row['read_start']}..HR{row['read_end']}` | "
             f"`HR{row['status']}` | "
-            f"`HR{row['setpoint_start']}..HR{row['setpoint_end']}` | "
-            f"`HR{row['hyst_start']}..HR{row['hyst_end']}` |"
+            f"`HR{row['setpoint_start']}..HR{row['setpoint_end']}` |"
         )
     return "\n".join(lines)
 
@@ -210,8 +207,8 @@ def render_modbus_map(payload: dict[str, object], config_name: str) -> str:
                 "",
                 "Channel map for each device on this line:",
                 "",
-                "| Channel | OVEN Address | rEAd | Status | C.SP | HYSt |",
-                "|--------:|-------------:|------|-------:|------|------|",
+                "| Channel | OVEN Address | rEAd | Status | C.SP |",
+                "|--------:|-------------:|------|-------:|------|",
             ]
         )
         example = bus_devices[0]
@@ -222,8 +219,7 @@ def render_modbus_map(payload: dict[str, object], config_name: str) -> str:
                 f"| `{channel['channel']}` | `{channel['address']}` | "
                 f"`HR{channel['read_start']}..HR{channel['read_end']}` | "
                 f"`HR{channel['status']}` | "
-                f"`HR{channel['setpoint_start']}..HR{channel['setpoint_end']}` | "
-                f"`HR{channel['hyst_start']}..HR{channel['hyst_end']}` |"
+                f"`HR{channel['setpoint_start']}..HR{channel['setpoint_end']}` |"
             )
         lines.extend(
             [
@@ -574,10 +570,9 @@ def _append_trm138_points(
     for channel in channels:
         read_register = _value_register_start(channel)
         setpoint_register = _setpoint_register_start(channel)
-        hyst_register = _hysteresis_register_start(channel)
         point_prefix = f"a{base_address}_ch{channel}"
-        # Each selected channel expands into one published process value, two
-        # published setup values and one internal-only alarm characteristic.
+        # Each selected channel expands into one published process value, one
+        # writable setpoint and one internal-only alarm characteristic.
         points.append(
             {
                 "name": f"{point_prefix}_read_R{read_register}",
@@ -605,20 +600,7 @@ def _append_trm138_points(
                 "register_type": "holding_register",
                 "modbus_address": setpoint_register,
                 "modbus_data_type": "float32",
-            }
-        )
-        points.append(
-            {
-                "name": f"{point_prefix}_hyst_R{hyst_register}",
-                "bus": bus_name,
-                "device": device,
-                "modbus_slave_id": base_address,
-                "address": base_address + channel - 1,
-                "parameter": "HYSt",
-                "protocol_format": "stored_dot",
-                "register_type": "holding_register",
-                "modbus_address": hyst_register,
-                "modbus_data_type": "float32",
+                "writable": True,
             }
         )
         points.append(
@@ -718,8 +700,6 @@ def _collect_devices(payload: dict[str, object]) -> dict[str, list[dict[str, obj
                         "status": _status_register(channel),
                         "setpoint_start": _setpoint_register_start(channel),
                         "setpoint_end": _setpoint_register_start(channel) + 1,
-                        "hyst_start": _hysteresis_register_start(channel),
-                        "hyst_end": _hysteresis_register_start(channel) + 1,
                     }
                     for channel in channels
                 ],
@@ -783,11 +763,7 @@ def _value_register_start(channel: int) -> int:
 
 
 def _setpoint_register_start(channel: int) -> int:
-    return TRM138_SETPOINT_BASE + (channel - 1) * TRM138_PARAMETER_BLOCK
-
-
-def _hysteresis_register_start(channel: int) -> int:
-    return TRM138_HYST_BASE + (channel - 1) * TRM138_PARAMETER_BLOCK
+    return TRM138_SETPOINT_BASE + (channel - 1) * TRM138_VALUE_REGISTERS_PER_CHANNEL
 
 
 def _time_mark_register(channel: int) -> int:
