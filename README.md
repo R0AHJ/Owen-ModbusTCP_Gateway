@@ -2,49 +2,49 @@
 
 ## OVEN RS-485 -> Modbus TCP
 
-Gateway for OVEN devices such as `TRM138`.
+Шлюз для приборов OVEN, в первую очередь для `TRM138`.
 
-The gateway communicates with field devices only through the OVEN protocol on
-`RS-485` and publishes data to clients through `Modbus TCP`.
+Шлюз работает с полевыми устройствами только по протоколу OVEN через `RS-485`
+и публикует данные клиентам через `Modbus TCP`.
 
-## What Is Implemented
+## Что реализовано
 
-- OVEN frame encode/decode
-- parameter hash and CRC calculation
-- polling over one or multiple `RS-485` buses
-- `Modbus TCP` publication
-- service status and telemetry registers
-- `rEAd` value publication with `time mark`
-- `TRM138` parameter decoding for `C.SP`, `HYSt`, `AL.t`
-- Modbus write-through for writable `C.SP` points with readback verification
-- logical unit state mask in `HR48`
+- кодирование и декодирование кадров OVEN
+- расчет hash параметра и CRC
+- опрос одной или нескольких линий `RS-485`
+- публикация данных через `Modbus TCP`
+- сервисные регистры статуса и телеметрии
+- публикация значения `rEAd` вместе с `time mark`
+- декодирование параметров `TRM138`: `C.SP`, `HYSt`, `AL.t`
+- запись `C.SP` через Modbus с последующей проверкой обратным чтением
+- расчет маски состояния логических устройств в `HR48`
 
-## Runtime Model
+## Модель работы
 
-- service registers are published in `SlaveID 1`
-- device `SlaveID` equals the device base OVEN address
-- `TRM138` is read only through the OVEN protocol
-- `time mark` is published but does not affect channel status
+- сервисные регистры публикуются в `SlaveID 1`
+- `SlaveID` прибора равен базовому OVEN-адресу устройства
+- `TRM138` читается только по OVEN-протоколу
+- `time mark` публикуется отдельно и не влияет на статус канала
 
-## Service Registers
+## Сервисные регистры
 
-- `HR1` gateway status
-- `HR2` last error code
-- `HR3` success counter
-- `HR4` timeout counter
-- `HR5` protocol error counter
-- `HR6` poll cycle counter
-- `HR10` line 1 status
-- `HR11` line 2 status
+- `HR1` статус шлюза
+- `HR2` последний код ошибки
+- `HR3` счетчик успешных обменов
+- `HR4` счетчик таймаутов
+- `HR5` счетчик ошибок протокола
+- `HR6` счетчик циклов опроса
+- `HR10` статус линии 1
+- `HR11` статус линии 2
 
-Gateway status codes:
+Коды статуса шлюза:
 
 - `1` ok
 - `2` degraded
 - `3` offline
 - `4` protocol error
 
-Last error codes:
+Коды последних ошибок:
 
 - `0` none
 - `1` timeout
@@ -53,16 +53,16 @@ Last error codes:
 - `4` decode error
 - `5` io error
 
-## TRM138 Device Map
+## Карта TRM138
 
-For each device:
+Для каждого прибора:
 
 - `rEAd`: `HR16..HR31`
-- channel statuses: `HR40..HR47`
-- LU mask: `HR48`
+- статусы каналов: `HR40..HR47`
+- маска логических устройств: `HR48`
 - `C.SP`: `HR56..HR71`
 
-Channel status codes:
+Коды статуса канала:
 
 - `0` disabled / no data / empty payload
 - `1` ok
@@ -70,65 +70,65 @@ Channel status codes:
 - `3` protocol error
 - `4` failed, reduced polling
 
-`HR48` contains one bitmask:
+`HR48` содержит битовую маску:
 
 - `bit0..bit7 -> LU1..LU8`
 
-## TRM138 Parameters
+## Параметры TRM138
 
-Supported OVEN parameters:
+Поддерживаемые параметры OVEN:
 
 - `rEAd` -> `float32`
 - `C.SP` -> `stored_dot`
 - `HYSt` -> `stored_dot`
 - `AL.t` -> `uint16`
 
-Important:
+Важно:
 
-- `C.SP` and `AL.t` are read by channel address, like `rEAd`
-- `C.SP` uses OVEN `stored_dot` encoding
-- both `2`-byte and `3`-byte `stored_dot` payloads are supported
+- `C.SP` и `AL.t` читаются по адресу канала так же, как `rEAd`
+- `C.SP` использует OVEN-кодирование `stored_dot`
+- поддерживаются `2`-байтовый и `3`-байтовый варианты `stored_dot`
 
-Examples confirmed on hardware:
+Подтвержденные на реальном приборе примеры:
 
 - `00 4b` -> `75.0`
 - `13 e8` -> `100.0`
 - `2b c2` -> `30.1`
 - `20 24 ea` -> `94.5`
 
-## Logical Unit Mask
+## Маска логических устройств
 
-The gateway calculates `HR48` from:
+Шлюз рассчитывает `HR48` по следующим данным:
 
-- measured channel value `rEAd`
-- setpoint `C.SP`
-- hysteresis `HYSt`
-- output characteristic `AL.t`
+- измеренное значение канала `rEAd`
+- уставка `C.SP`
+- гистерезис `HYSt`
+- характеристика выхода `AL.t`
 
-`AL.t` is polled as internal-only data for every configured channel and is not
-published to Modbus directly.
+`AL.t` опрашивается как внутренний параметр для каждого настроенного канала и
+не публикуется в Modbus напрямую.
 
-Current template configs publish `C.SP` for write access. `HYSt` remains
-supported by the protocol layer but is not exposed in the ready-to-run example
-configs.
-
-Supported `AL.t` modes:
+Поддерживаемые режимы `AL.t`:
 
 - `1` direct hysteresis
 - `2` reverse hysteresis
 - `3` inside band
 - `4` outside band
 
-## Config Notes
+Готовые шаблоны конфигурации сейчас публикуют для записи только `C.SP`.
+`HYSt` поддерживается на уровне протокола, но в штатных JSON-конфигах пока не
+выводится в карту Modbus.
 
-Health section:
+## Замечания по конфигурации
+
+Раздел `health`:
 
 - `fault_after_failures`
 - `recovery_poll_interval_cycles`
 
-Legacy `stale_after_cycles` is ignored if present in an old config.
+Если в старом конфиге присутствует `stale_after_cycles`, он игнорируется.
 
-Ready examples:
+Готовые примеры:
 
 - [owen_config.single_trm138.com6.json](/D:/Python_Project/owen_config.single_trm138.com6.json)
 - [owen_config.example.json](/D:/Python_Project/owen_config.example.json)
@@ -136,11 +136,12 @@ Ready examples:
 - [owen_config.linux.json](/D:/Python_Project/owen_config.linux.json)
 - [owen_config.windows.json](/D:/Python_Project/owen_config.windows.json)
 
-Project navigation:
+Навигация по проекту:
 
 - [PROJECT_FILES.md](/D:/Python_Project/PROJECT_FILES.md)
+- [CHANGELOG_RU.md](/D:/Python_Project/CHANGELOG_RU.md)
 
-## Install
+## Установка
 
 ```bash
 python -m venv .venv
@@ -154,19 +155,19 @@ Windows:
 .venv\Scripts\Activate.ps1
 ```
 
-## Run
+## Запуск
 
 ```bash
 python -m owen_gateway --config owen_config.json
 ```
 
-Probe:
+Пробный опрос:
 
 ```bash
 python -m owen_gateway.probe --config owen_probe.com6.json --log-level INFO
 ```
 
-Tests:
+Тесты:
 
 ```bash
 python -m unittest discover -s tests
