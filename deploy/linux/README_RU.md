@@ -148,6 +148,7 @@ gate-config.sh show-trm138 --line 1 --base-address 96
 - `gate-config`
 - `gate-menu`
 - `gate-status`
+- `gate-watchdog`
 - `gate-logs`
 - `gate-restart`
 - `gate-service`
@@ -157,6 +158,27 @@ gate-config.sh show-trm138 --line 1 --base-address 96
 - `/usr/local/bin/gate-config`
 - `/usr/local/bin/gate-menu`
 - `/usr/local/bin/gate-status`
+- `/usr/local/bin/gate-watchdog`
+
+## Watchdog для переподключения USB-serial
+
+Установщик теперь ставит:
+
+- `/usr/local/bin/gate-watchdog.sh`
+- `owen-gateway-watchdog.service`
+- `owen-gateway-watchdog.timer`
+
+Timer проверяет раз в минуту, не завис ли `owen-gateway` на удалённом
+serial-устройстве вида `/dev/ttyACM* (deleted)` после переподключения адаптера.
+Если находит такие fd или вообще не видит открытого serial fd, он делает
+`systemctl restart owen-gateway`.
+
+Проверка:
+
+```bash
+systemctl status owen-gateway-watchdog.timer
+gate-watchdog
+```
 
 ## Что проверить на сервере после установки
 

@@ -1,0 +1,8 @@
+[Unit]
+Description=OVEN gateway serial watchdog
+After=owen-gateway.service
+Requires=owen-gateway.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/gate-watchdog.sh

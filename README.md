@@ -191,9 +191,15 @@ gate-status.sh
 ```
 
 Также в Linux ставятся короткие команды `/usr/local/bin/gate-config`,
-`/usr/local/bin/gate-menu`, `/usr/local/bin/gate-status` и
+`/usr/local/bin/gate-menu`, `/usr/local/bin/gate-status`,
+`/usr/local/bin/gate-watchdog` и
 `/etc/profile.d/owen-gateway.sh` с алиасами:
-`gate-config`, `gate-menu`, `gate-status`, `gate-logs`, `gate-restart`, `gate-service`.
+`gate-config`, `gate-menu`, `gate-status`, `gate-watchdog`,
+`gate-logs`, `gate-restart`, `gate-service`.
+
+В Linux-установку также входит watchdog timer `owen-gateway-watchdog.timer`,
+который раз в минуту проверяет, не завис ли сервис на `ttyACM*(deleted)` после
+переподключения USB-serial адаптера, и перезапускает его при необходимости.
 
 В Linux-конфигах порт указывается явно, например `/dev/ttyACM0`, чтобы путь
 был понятен при ручной правке и диагностике.

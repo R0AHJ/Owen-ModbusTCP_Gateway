@@ -26,6 +26,9 @@ SERVICE_TEMPLATE="${SERVICE_TEMPLATE:-${REPO_DIR}/deploy/linux/owen-gateway.serv
 CONFIG_WRAPPER_TEMPLATE="${CONFIG_WRAPPER_TEMPLATE:-${REPO_DIR}/deploy/linux/gate-config.sh}"
 MENU_WRAPPER_TEMPLATE="${MENU_WRAPPER_TEMPLATE:-${REPO_DIR}/deploy/linux/gate-menu.sh}"
 STATUS_WRAPPER_TEMPLATE="${STATUS_WRAPPER_TEMPLATE:-${REPO_DIR}/deploy/linux/gate-status.sh}"
+WATCHDOG_WRAPPER_TEMPLATE="${WATCHDOG_WRAPPER_TEMPLATE:-${REPO_DIR}/deploy/linux/gate-watchdog.sh}"
+WATCHDOG_SERVICE_TEMPLATE="${WATCHDOG_SERVICE_TEMPLATE:-${REPO_DIR}/deploy/linux/owen-gateway-watchdog.service.template}"
+WATCHDOG_TIMER_TEMPLATE="${WATCHDOG_TIMER_TEMPLATE:-${REPO_DIR}/deploy/linux/owen-gateway-watchdog.timer.template}"
 SHELL_PROFILE_TEMPLATE="${SHELL_PROFILE_TEMPLATE:-${REPO_DIR}/deploy/linux/owen-shell-profile.sh}"
 
 if [[ ! -f "${REPO_DIR}/requirements.txt" ]]; then
@@ -55,6 +58,21 @@ fi
 
 if [[ ! -f "${STATUS_WRAPPER_TEMPLATE}" ]]; then
   echo "status wrapper template not found: ${STATUS_WRAPPER_TEMPLATE}" >&2
+  exit 1
+fi
+
+if [[ ! -f "${WATCHDOG_WRAPPER_TEMPLATE}" ]]; then
+  echo "watchdog wrapper template not found: ${WATCHDOG_WRAPPER_TEMPLATE}" >&2
+  exit 1
+fi
+
+if [[ ! -f "${WATCHDOG_SERVICE_TEMPLATE}" ]]; then
+  echo "watchdog service template not found: ${WATCHDOG_SERVICE_TEMPLATE}" >&2
+  exit 1
+fi
+
+if [[ ! -f "${WATCHDOG_TIMER_TEMPLATE}" ]]; then
+  echo "watchdog timer template not found: ${WATCHDOG_TIMER_TEMPLATE}" >&2
   exit 1
 fi
 
@@ -143,12 +161,22 @@ sed \
 "${RUN_AS_ROOT[@]}" ln -sf "/usr/local/bin/gate-status.sh" "/usr/local/bin/gate-status"
 rm -f "${TMP_STATUS}"
 
+TMP_WATCHDOG="$(mktemp)"
+cp "${WATCHDOG_WRAPPER_TEMPLATE}" "${TMP_WATCHDOG}"
+"${RUN_AS_ROOT[@]}" install -m 0755 "${TMP_WATCHDOG}" "/usr/local/bin/gate-watchdog.sh"
+"${RUN_AS_ROOT[@]}" ln -sf "/usr/local/bin/gate-watchdog.sh" "/usr/local/bin/gate-watchdog"
+rm -f "${TMP_WATCHDOG}"
+
 "${RUN_AS_ROOT[@]}" install -m 0644 "${SHELL_PROFILE_TEMPLATE}" "/etc/profile.d/owen-gateway.sh"
+
+"${RUN_AS_ROOT[@]}" install -m 0644 "${WATCHDOG_SERVICE_TEMPLATE}" "/etc/systemd/system/owen-gateway-watchdog.service"
+"${RUN_AS_ROOT[@]}" install -m 0644 "${WATCHDOG_TIMER_TEMPLATE}" "/etc/systemd/system/owen-gateway-watchdog.timer"
 
 "${RUN_AS_ROOT[@]}" chown -R "${SERVICE_USER}:${SERVICE_GROUP}" "${APP_DIR}" "${CONFIG_DIR}"
 
 "${RUN_AS_ROOT[@]}" systemctl daemon-reload
 "${RUN_AS_ROOT[@]}" systemctl enable "${SERVICE_NAME}.service"
+"${RUN_AS_ROOT[@]}" systemctl enable --now "owen-gateway-watchdog.timer"
 
 echo
 echo "Installed successfully."
@@ -156,7 +184,9 @@ echo "Config: ${CONFIG_DIR}/owen_config.json"
 echo "Config tool:    /usr/local/bin/gate-config.sh"
 echo "Menu tool:      /usr/local/bin/gate-menu.sh"
 echo "Status tool:    /usr/local/bin/gate-status.sh"
-echo "Short commands: /usr/local/bin/gate-config, /usr/local/bin/gate-menu, /usr/local/bin/gate-status"
+echo "Watchdog tool:  /usr/local/bin/gate-watchdog.sh"
+echo "Short commands: /usr/local/bin/gate-config, /usr/local/bin/gate-menu, /usr/local/bin/gate-status, /usr/local/bin/gate-watchdog"
+echo "Watchdog timer: owen-gateway-watchdog.timer"
 echo "Shell aliases:  /etc/profile.d/owen-gateway.sh"
 echo "Start service: sudo systemctl start ${SERVICE_NAME}"
 echo "Status:        systemctl status ${SERVICE_NAME}"

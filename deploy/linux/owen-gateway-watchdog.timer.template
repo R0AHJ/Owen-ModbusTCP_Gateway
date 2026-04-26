@@ -1,0 +1,11 @@
+[Unit]
+Description=Run OVEN gateway serial watchdog every minute
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=15s
+Unit=owen-gateway-watchdog.service
+
+[Install]
+WantedBy=timers.target
