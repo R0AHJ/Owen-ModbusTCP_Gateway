@@ -164,9 +164,6 @@ python -m owen_gateway --config owen_config.json
 
 Пробный опрос:
 
-```bash
-python -m owen_gateway.probe --config owen_probe.com6.json --log-level INFO
-```
 
 Тесты:
 
@@ -181,3 +178,29 @@ python -m unittest discover -s tests
 - [deploy/linux/install.sh](/D:/Python_Project/deploy/linux/install.sh)
 - [deploy/linux/owen-gateway.service.template](/D:/Python_Project/deploy/linux/owen-gateway.service.template)
 - [deploy/linux/README_RU.md](/D:/Python_Project/deploy/linux/README_RU.md)
+
+Установщик по умолчанию настраивает сервисный аккаунт с группой `dialout`
+и ставит wrapper-скрипты в `/usr/local/bin` для конфиг-команд и диагностики:
+
+```bash
+gate-config.sh list-serial
+gate-config.sh list-config
+gate-config.sh show-trm138 --line 1 --base-address 96
+gate-menu.sh
+gate-status.sh
+```
+
+Также в Linux ставятся короткие команды `/usr/local/bin/gate-config`,
+`/usr/local/bin/gate-menu`, `/usr/local/bin/gate-status` и
+`/etc/profile.d/owen-gateway.sh` с алиасами:
+`gate-config`, `gate-menu`, `gate-status`, `gate-logs`, `gate-restart`, `gate-service`.
+
+В Linux-конфигах порт указывается явно, например `/dev/ttyACM0`, чтобы путь
+был понятен при ручной правке и диагностике.
+
+Для серверной эксплуатации лучше использовать постоянный alias через `udev`,
+например `/dev/owen-line1`. Пример правила есть в
+[99-owen-serial.rules.example](/D:/Python_Project/deploy/linux/99-owen-serial.rules.example).
+
+`probe` не входит в штатную схему эксплуатации. Нормальный режим работы:
+один запущенный `owen_gateway`, который единолично владеет serial-портом.

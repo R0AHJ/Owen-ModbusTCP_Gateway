@@ -18,6 +18,8 @@ def _base_config() -> dict[str, object]:
             "address_bits": 8,
         },
         "poll_interval_ms": 1000,
+        "request_retries": 0,
+        "inter_request_delay_ms": 0,
         "modbus": {
             "host": "127.0.0.1",
             "port": 15020,
@@ -74,6 +76,49 @@ class ConfigTests(unittest.TestCase):
         config = self._load(payload)
 
         self.assertEqual(config.points[0].modbus_slave_id, 96)
+
+    def test_bus_retry_and_gap_are_loaded(self) -> None:
+        payload = _base_config()
+        payload.pop("serial")
+        payload.pop("poll_interval_ms")
+        payload.pop("request_retries")
+        payload.pop("inter_request_delay_ms")
+        payload["buses"] = [
+            {
+                "name": "line1",
+                "serial": {
+                    "port": "/dev/ttyACM2",
+                    "baudrate": 9600,
+                    "bytesize": 8,
+                    "parity": "N",
+                    "stopbits": 1,
+                    "timeout_ms": 1000,
+                    "address_bits": 8,
+                },
+                "poll_interval_ms": 2000,
+                "request_retries": 15,
+                "inter_request_delay_ms": 15,
+                "modbus_slave_base": 10,
+            }
+        ]
+        payload["points"] = [
+            {
+                "name": "ch1",
+                "bus": "line1",
+                "device": 1,
+                "address": 48,
+                "parameter": "rEAd",
+                "protocol_format": "float32",
+                "register_type": "holding_register",
+                "modbus_address": 16,
+                "modbus_data_type": "float32",
+            }
+        ]
+
+        config = self._load(payload)
+
+        self.assertEqual(config.buses[0].request_retries, 15)
+        self.assertEqual(config.buses[0].inter_request_delay_ms, 15)
 
     def test_same_register_map_is_allowed_on_different_slave_ids(self) -> None:
         payload = _base_config()

@@ -18,21 +18,68 @@
 устройству `/dev/ttyUSB*` или `/dev/ttyACM*`. Обычно это решается добавлением
 пользователя в группу `dialout`.
 
+В конфиге рекомендуется указывать порт явно, без скрытых алиасов, например:
+
+- `/dev/ttyACM0`
+- `/dev/ttyACM1`
+- `/dev/ttyACM2`
+- `/dev/ttyACM3`
+
+Для серверной эксплуатации лучше использовать не номер `ttyACM*`, а постоянный
+alias через `udev`, например `/dev/owen-line1`. Пример правила лежит в
+`deploy/linux/99-owen-serial.rules.example`.
+
 ## Быстрая установка
 
 Из корня репозитория:
 
 ```bash
 chmod +x deploy/linux/install.sh
-sudo SERVICE_USER=owen SERVICE_GROUP=dialout ./deploy/linux/install.sh
+sudo SERVICE_USER=owen ./deploy/linux/install.sh
 ```
 
 По умолчанию будут использованы:
 
 - код проекта: `/opt/owen-gateway`
 - рабочий конфиг: `/etc/owen-gateway/owen_config.json`
-- probe-конфиг: `/etc/owen-gateway/owen_probe.json`
 - имя сервиса: `owen-gateway`
+- группа сервиса: `dialout`
+
+После установки проверь и при необходимости поправь поле `serial.port` в обоих
+конфигах под фактический Linux-порт нужной линии.
+
+## Постоянное имя порта через udev
+
+Если USB-serial интерфейсы после переподключения меняют номер `ttyACM*`,
+сделай собственный alias.
+
+1. Посмотри текущие устройства:
+```bash
+ls -l /dev/serial/by-id
+ls -l /dev/ttyACM*
+```
+2. Определи нужный интерфейс адаптера:
+```bash
+udevadm info -a -n /dev/ttyACM2
+```
+3. Скопируй пример правила:
+```bash
+sudo cp deploy/linux/99-owen-serial.rules.example /etc/udev/rules.d/99-owen-serial.rules
+```
+4. Подставь свои значения `idVendor`, `idProduct`, серийный номер и номер интерфейса.
+5. Перезагрузи правила:
+```bash
+sudo udevadm control --reload
+sudo udevadm trigger
+```
+6. Убедись, что alias появился:
+```bash
+ls -l /dev/owen-line1
+```
+7. Используй этот alias в `serial.port`, например:
+```json
+"port": "/dev/owen-line1"
+```
 
 ## Переменные установки
 
@@ -45,7 +92,6 @@ sudo SERVICE_USER=owen SERVICE_GROUP=dialout ./deploy/linux/install.sh
 - `SERVICE_GROUP`
 - `PYTHON_BIN`
 - `CONFIG_SOURCE`
-- `PROBE_CONFIG_SOURCE`
 
 Пример:
 
@@ -75,25 +121,42 @@ systemctl status owen-gateway
 journalctl -u owen-gateway -f
 ```
 
-## Проверка probe
-
-Если нужен отдельный пробный опрос:
-
-```bash
-PYTHONPATH=/opt/owen-gateway /opt/owen-gateway/.venv/bin/python -m owen_gateway.probe \
-  --config /etc/owen-gateway/owen_probe.json \
-  --log-level INFO
-```
-
 ## Проверка конфиг-утилит
 
 Примеры:
 
 ```bash
-PYTHONPATH=/opt/owen-gateway /opt/owen-gateway/.venv/bin/python -m owen_gateway config list-config --config /etc/owen-gateway/owen_config.json
-PYTHONPATH=/opt/owen-gateway /opt/owen-gateway/.venv/bin/python -m owen_gateway config list-line --config /etc/owen-gateway/owen_config.json --line 1
-PYTHONPATH=/opt/owen-gateway /opt/owen-gateway/.venv/bin/python -m owen_gateway config show-trm138 --config /etc/owen-gateway/owen_config.json --line 1 --base-address 96
+gate-config.sh list-serial
+gate-config.sh list-config
+gate-config.sh list-line --line 1
+gate-config.sh show-trm138 --line 1 --base-address 96
 ```
+
+`gate-config.sh` устанавливается в `/usr/local/bin` и всегда использует
+`/etc/owen-gateway/owen_config.json`.
+
+`gate-status.sh` ставится туда же и показывает:
+
+- `systemctl status`
+- доступные serial-порты и alias
+- краткую сводку активного конфига
+- сервисные Modbus-регистры
+- последние строки `journalctl`
+
+Также ставится `/etc/profile.d/owen-gateway.sh` с алиасами:
+
+- `gate-config`
+- `gate-menu`
+- `gate-status`
+- `gate-logs`
+- `gate-restart`
+- `gate-service`
+
+Кроме алиасов устанавливаются и прямые команды:
+
+- `/usr/local/bin/gate-config`
+- `/usr/local/bin/gate-menu`
+- `/usr/local/bin/gate-status`
 
 ## Что проверить на сервере после установки
 
@@ -102,3 +165,7 @@ PYTHONPATH=/opt/owen-gateway /opt/owen-gateway/.venv/bin/python -m owen_gateway 
 3. Поднимается ли `Modbus TCP` на нужном адресе и порту
 4. Читается ли `rEAd`
 5. Работает ли запись `C.SP` и подтверждается ли она обратным чтением
+
+Важно: в штатном режиме с serial-портом должен работать только один процесс
+`owen-gateway`. Параллельные диагностические клиенты на том же `/dev/ttyACM*`
+или `/dev/ttyUSB*` недопустимы.

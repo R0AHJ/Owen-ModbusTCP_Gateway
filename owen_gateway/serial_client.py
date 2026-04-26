@@ -58,12 +58,13 @@ class OwenSerialClient:
         self._serial.reset_input_buffer()
         self._serial.write(request)
         self._serial.flush()
-        response = self._serial.read_until(b"\r")
+        response = _read_oven_response(self._serial, self.config.timeout_ms / 1000)
         if not response:
             raise TimeoutError(
                 f"no response from OVEN device address={address} parameter={parameter_name}"
             )
-        return request, response, decode_frame(response)
+        normalized_response = _normalize_frame_response(response)
+        return request, normalized_response, decode_frame(normalized_response)
 
     def exchange_write(
         self,
@@ -84,13 +85,14 @@ class OwenSerialClient:
         self._serial.reset_input_buffer()
         self._serial.write(request)
         self._serial.flush()
-        response = self._serial.read_until(b"\r")
+        response = _read_oven_response(self._serial, self.config.timeout_ms / 1000)
         if not response:
             raise TimeoutError(
                 f"no write response from OVEN device address={address} parameter={parameter_name}"
             )
+        normalized_response = _normalize_frame_response(response)
         try:
-            return request, response, decode_frame(response)
+            return request, normalized_response, decode_frame(normalized_response)
         except ValueError:
             # Some TRM138 write operations return a short control-style
             # acknowledgement instead of a regular framed payload. Keep the
@@ -205,3 +207,47 @@ def _modbus_crc(data: bytes) -> int:
             else:
                 crc >>= 1
     return crc & 0xFFFF
+
+
+def _normalize_frame_response(response: bytes) -> bytes:
+    # Some USB-RS485 adapters deliver a complete ASCII-nibble OVEN frame
+    # without the trailing CR terminator. Treat this as a transport quirk and
+    # restore the expected marker for normal '#' frames before decoding.
+    if response.startswith(b"#") and not response.endswith(b"\r"):
+        return response + b"\r"
+    return response
+
+
+def _read_oven_response(serial_port: object, timeout_seconds: float) -> bytes:
+    original_timeout = getattr(serial_port, "timeout", None)
+    inter_byte_timeout = _inter_byte_timeout(timeout_seconds)
+    empty_reads = 0
+    response = bytearray()
+    try:
+        serial_port.timeout = timeout_seconds
+        first_chunk = serial_port.read(1)
+        if not first_chunk:
+            return b""
+        response.extend(first_chunk)
+        serial_port.timeout = inter_byte_timeout
+        while len(response) < 128:
+            if response.endswith(b"\r") or response.endswith(b"\x16"):
+                return bytes(response)
+            chunk_size = max(1, int(getattr(serial_port, "in_waiting", 0) or 0))
+            chunk = serial_port.read(chunk_size)
+            if chunk:
+                response.extend(chunk)
+                empty_reads = 0
+                continue
+            empty_reads += 1
+            if empty_reads >= 2:
+                return bytes(response)
+        return bytes(response)
+    finally:
+        serial_port.timeout = original_timeout
+
+
+def _inter_byte_timeout(timeout_seconds: float) -> float:
+    if timeout_seconds <= 0:
+        return 0.05
+    return min(max(timeout_seconds / 5, 0.02), 0.2)

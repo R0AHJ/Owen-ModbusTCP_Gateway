@@ -1,6 +1,7 @@
 import unittest
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 from owen_gateway.config import load_config
 from owen_gateway.config_tools import (
@@ -13,6 +14,7 @@ from owen_gateway.config_tools import (
     remove_trm138_device,
     render_config_summary,
     render_device_details,
+    render_serial_ports,
     set_line,
     update_trm138_channels,
     write_generated_modbus_map,
@@ -431,6 +433,42 @@ class ConfigToolsTests(unittest.TestCase):
 
         self.assertEqual(len(devices), 1)
         self.assertIn("SlaveID: 96", details)
+
+    def test_render_serial_ports_prefers_by_id_aliases(self) -> None:
+        class DummyPort:
+            def __init__(self, device: str, description: str, hwid: str) -> None:
+                self.device = device
+                self.description = description
+                self.hwid = hwid
+
+        fake_paths = [
+            Path("/dev/serial/by-id/usb-Adapter-if04"),
+        ]
+
+        with patch("owen_gateway.config_tools.os.name", "posix"), patch(
+            "owen_gateway.config_tools.Path.exists", return_value=True
+        ), patch(
+            "owen_gateway.config_tools.Path.iterdir", return_value=fake_paths
+        ), patch(
+            "pathlib.Path.is_symlink", return_value=True
+        ), patch(
+            "pathlib.Path.resolve", return_value=Path("/dev/ttyACM2")
+        ), patch(
+            "owen_gateway.config_tools._list_system_serial_ports",
+            return_value=[DummyPort("/dev/ttyACM2", "USB Serial", "HWID")],
+        ):
+            rendered = render_serial_ports()
+
+        self.assertIn(f"{fake_paths[0]} -> /dev/ttyACM2", rendered)
+        self.assertNotIn("USB Serial", rendered)
+
+    def test_render_serial_ports_reports_empty_inventory(self) -> None:
+        with patch("owen_gateway.config_tools.os.name", "nt"), patch(
+            "owen_gateway.config_tools._list_system_serial_ports", return_value=[]
+        ):
+            rendered = render_serial_ports()
+
+        self.assertEqual(rendered, "No serial ports detected.")
 
 
 def load_config_from_payload(payload: dict[str, object]):

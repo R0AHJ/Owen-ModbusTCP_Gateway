@@ -10,6 +10,7 @@ from owen_gateway.config_tools import (
     add_trm138_device,
     export_config_document,
     get_line_devices,
+    list_serial_ports,
     load_config_document,
     parse_channels,
     remove_line,
@@ -17,6 +18,7 @@ from owen_gateway.config_tools import (
     render_config_summary,
     render_device_details,
     render_line_devices,
+    render_serial_ports,
     save_config_document,
     set_line,
     update_trm138_channels,
@@ -58,6 +60,8 @@ def build_config_parser() -> argparse.ArgumentParser:
     line_parser.add_argument("--timeout-ms", type=int, default=1000, help="serial timeout in ms")
     line_parser.add_argument("--address-bits", type=int, default=8, choices=[8, 11], help="OVEN address width")
     line_parser.add_argument("--poll-interval-ms", type=int, default=1000, help="poll interval in ms")
+    line_parser.add_argument("--request-retries", type=int, default=0, help="retries after timeout or protocol error")
+    line_parser.add_argument("--inter-request-delay-ms", type=int, default=0, help="delay between requests in ms")
     line_parser.add_argument("--slave-base", type=int, help="starting SlaveID for this line")
 
     trm_parser = subparsers.add_parser("add-trm138", help="add TRM138 points to selected line")
@@ -73,6 +77,8 @@ def build_config_parser() -> argparse.ArgumentParser:
 
     list_parser = subparsers.add_parser("list-config", help="print configured lines and devices")
     list_parser.add_argument("--config", default="owen_config.json", help="path to config json")
+
+    subparsers.add_parser("list-serial", help="print available serial ports and aliases")
 
     show_line_parser = subparsers.add_parser("list-line", help="print devices on selected line")
     show_line_parser.add_argument("--config", default="owen_config.json", help="path to config json")
@@ -142,6 +148,10 @@ def main() -> int:
 def _run_config_tool(argv: list[str]) -> int:
     parser = build_config_parser()
     args = parser.parse_args(argv)
+    if args.config_command == "list-serial":
+        print(render_serial_ports())
+        return 0
+
     payload = load_config_document(args.config)
 
     if args.config_command == "set-line":
@@ -156,6 +166,8 @@ def _run_config_tool(argv: list[str]) -> int:
             timeout_ms=args.timeout_ms,
             poll_interval_ms=args.poll_interval_ms,
             address_bits=args.address_bits,
+            request_retries=args.request_retries,
+            inter_request_delay_ms=args.inter_request_delay_ms,
             modbus_slave_base=args.slave_base,
         )
         save_config_document(args.config, payload)
@@ -285,11 +297,12 @@ def _run_config_menu(config_path: str) -> int:
         print("------------------------")
         print("1. Show config summary")
         print("2. Line submenu")
-        print("3. Set or update line")
+        print("3. Set or update line binding")
         print("4. Add TRM138")
         print("5. Remove line")
         print("6. Export config")
         print("7. Regenerate Modbus map")
+        print("8. Show serial ports")
         print("0. Exit")
         choice = input("Select action: ").strip()
 
@@ -305,7 +318,10 @@ def _run_config_menu(config_path: str) -> int:
                 continue
             if choice == "3":
                 line = int(input("Line number (1..2): ").strip())
-                port = input("Serial port: ").strip()
+                port = _prompt_serial_port_choice()
+                if port is None:
+                    print("cancelled")
+                    continue
                 baudrate = int(input("Baudrate [9600]: ").strip() or "9600")
                 bytesize = int(input("Bytesize [8]: ").strip() or "8")
                 parity = (input("Parity [N]: ").strip() or "N").upper()
@@ -313,6 +329,10 @@ def _run_config_menu(config_path: str) -> int:
                 timeout_ms = int(input("Timeout ms [1000]: ").strip() or "1000")
                 address_bits = int(input("Address bits [8]: ").strip() or "8")
                 poll_interval_ms = int(input("Poll interval ms [1000]: ").strip() or "1000")
+                request_retries = int(input("Request retries [0]: ").strip() or "0")
+                inter_request_delay_ms = int(
+                    input("Inter-request delay ms [0]: ").strip() or "0"
+                )
                 slave_base_raw = input("Slave base [default]: ").strip()
                 set_line(
                     payload,
@@ -325,6 +345,8 @@ def _run_config_menu(config_path: str) -> int:
                     timeout_ms=timeout_ms,
                     address_bits=address_bits,
                     poll_interval_ms=poll_interval_ms,
+                    request_retries=request_retries,
+                    inter_request_delay_ms=inter_request_delay_ms,
                     modbus_slave_base=int(slave_base_raw) if slave_base_raw else None,
                 )
             elif choice == "4":
@@ -356,6 +378,11 @@ def _run_config_menu(config_path: str) -> int:
                 continue
             elif choice == "7":
                 pass
+            elif choice == "8":
+                print()
+                print(render_serial_ports())
+                _pause_menu()
+                continue
             elif choice == "0":
                 return 0
             else:
@@ -383,6 +410,39 @@ def _prompt_device_selection(payload: dict[str, object], line: int) -> int:
 
 def _pause_menu() -> None:
     input("Press Enter to continue...")
+
+
+def _prompt_serial_port_choice(current_port: str | None = None) -> str | None:
+    ports = list_serial_ports()
+    print()
+    print("Serial port selection")
+    print("---------------------")
+    if current_port:
+        print(f"Current port: {current_port}")
+    if ports:
+        for index, entry in enumerate(ports, start=1):
+            marker = " (current)" if current_port and entry["path"] == current_port else ""
+            target = f" -> {entry['target']}" if entry["target"] else ""
+            print(f"{index}. {entry['path']}{target}{marker}")
+    else:
+        print("No serial ports detected automatically.")
+    print("m. Enter path manually")
+    print("q. Cancel")
+    while True:
+        choice = input("Select port: ").strip().lower()
+        if choice == "q":
+            return None
+        if choice == "m":
+            manual_port = input("Serial port path: ").strip()
+            return manual_port or None
+        try:
+            selected_index = int(choice)
+        except ValueError:
+            print("Unknown command")
+            continue
+        if 1 <= selected_index <= len(ports):
+            return str(ports[selected_index - 1]["path"])
+        print("Port selection is out of range")
 
 
 def _get_line_device_info(
@@ -440,15 +500,25 @@ def _prompt_channel_checklist(current_channels: list[int]) -> list[int] | None:
 def _run_line_submenu(config_path: str, line: int) -> None:
     while True:
         payload = load_config_document(config_path)
+        bus_payload = _get_line_bus_payload(payload, line)
         print()
         print(f"Line {line} submenu")
         print("----------------")
+        if bus_payload is not None:
+            serial = bus_payload["serial"]
+            print(
+                f"Bound port: {serial['port']} "
+                f"({serial['baudrate']} {serial['bytesize']}{serial['parity']}{serial['stopbits']})"
+            )
+        else:
+            print("Line is not configured yet.")
         print(render_line_devices(payload, line))
         print()
         print("1. Show device details")
         print("2. Edit device channels")
         print("3. Remove device")
         print("4. Add TRM138 to this line")
+        print("5. Rebind line serial port")
         print("0. Back")
         choice = input("Select action: ").strip()
 
@@ -494,6 +564,54 @@ def _run_line_submenu(config_path: str, line: int) -> None:
                     base_address=base_address,
                     channels=channels,
                 )
+            elif choice == "5":
+                current_port = None
+                if bus_payload is not None:
+                    current_port = str(bus_payload["serial"]["port"])
+                port = _prompt_serial_port_choice(current_port)
+                if port is None:
+                    print("cancelled")
+                    continue
+                if bus_payload is None:
+                    baudrate = int(input("Baudrate [9600]: ").strip() or "9600")
+                    bytesize = int(input("Bytesize [8]: ").strip() or "8")
+                    parity = (input("Parity [N]: ").strip() or "N").upper()
+                    stopbits = int(input("Stopbits [1]: ").strip() or "1")
+                    timeout_ms = int(input("Timeout ms [1000]: ").strip() or "1000")
+                    address_bits = int(input("Address bits [8]: ").strip() or "8")
+                    poll_interval_ms = int(input("Poll interval ms [1000]: ").strip() or "1000")
+                    request_retries = int(input("Request retries [0]: ").strip() or "0")
+                    inter_request_delay_ms = int(
+                        input("Inter-request delay ms [0]: ").strip() or "0"
+                    )
+                    slave_base_raw = input("Slave base [default]: ").strip()
+                else:
+                    serial = bus_payload["serial"]
+                    baudrate = int(serial["baudrate"])
+                    bytesize = int(serial["bytesize"])
+                    parity = str(serial["parity"])
+                    stopbits = int(serial["stopbits"])
+                    timeout_ms = int(serial["timeout_ms"])
+                    address_bits = int(serial.get("address_bits", 8))
+                    poll_interval_ms = int(bus_payload["poll_interval_ms"])
+                    request_retries = int(bus_payload.get("request_retries", 0))
+                    inter_request_delay_ms = int(bus_payload.get("inter_request_delay_ms", 0))
+                    slave_base_raw = str(bus_payload.get("modbus_slave_base") or "")
+                set_line(
+                    payload,
+                    line=line,
+                    port=port,
+                    baudrate=baudrate,
+                    bytesize=bytesize,
+                    parity=parity,
+                    stopbits=stopbits,
+                    timeout_ms=timeout_ms,
+                    address_bits=address_bits,
+                    poll_interval_ms=poll_interval_ms,
+                    request_retries=request_retries,
+                    inter_request_delay_ms=inter_request_delay_ms,
+                    modbus_slave_base=int(slave_base_raw) if slave_base_raw else None,
+                )
             elif choice == "0":
                 return
             else:
@@ -506,3 +624,22 @@ def _run_line_submenu(config_path: str, line: int) -> None:
             print(f"generated map: {map_path}")
         except Exception as exc:
             print(f"error: {exc}")
+
+
+def _get_line_bus_payload(payload: dict[str, object], line: int) -> dict[str, object] | None:
+    bus_name = _resolve_line_bus_name(payload, line)
+    for bus in payload.get("buses", []):
+        if str(bus.get("name")) == bus_name:
+            return bus
+    return None
+
+
+def _resolve_line_bus_name(payload: dict[str, object], line: int) -> str:
+    canonical = f"line{line}"
+    bus_names = {str(bus.get("name")) for bus in payload.get("buses", [])}
+    if canonical in bus_names:
+        return canonical
+    legacy = f"bus{line}"
+    if legacy in bus_names:
+        return legacy
+    return canonical

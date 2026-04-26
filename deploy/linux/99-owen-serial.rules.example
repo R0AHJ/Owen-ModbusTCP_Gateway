@@ -1,0 +1,25 @@
+# Example udev rules for stable OVEN serial aliases.
+# Copy to /etc/udev/rules.d/99-owen-serial.rules and replace the values below
+# with the actual attributes from:
+#   udevadm info -a -n /dev/ttyACM2
+#
+# Typical workflow:
+# 1. Find the needed USB serial interface in /dev/serial/by-id
+# 2. Inspect its attributes with udevadm
+# 3. Create a readable stable alias such as /dev/owen-line1
+#
+# Example for one interface of a WCH USB Quad Serial adapter:
+# SUBSYSTEM=="tty", \
+#   ATTRS{idVendor}=="1a86", \
+#   ATTRS{idProduct}=="55d4", \
+#   ATTRS{serial}=="BCD91DABCD", \
+#   ENV{ID_USB_INTERFACE_NUM}=="04", \
+#   SYMLINK+="owen-line1"
+#
+# Second line example:
+# SUBSYSTEM=="tty", \
+#   ATTRS{idVendor}=="1a86", \
+#   ATTRS{idProduct}=="55d4", \
+#   ATTRS{serial}=="BCD91DABCD", \
+#   ENV{ID_USB_INTERFACE_NUM}=="02", \
+#   SYMLINK+="owen-line2"

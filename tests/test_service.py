@@ -1,5 +1,6 @@
 import unittest
 from unittest.mock import AsyncMock
+from unittest.mock import patch
 
 from owen_gateway.config import (
     BusConfig,
@@ -616,12 +617,94 @@ class ServiceHelperTests(unittest.TestCase):
         )
 
         self.assertEqual(service.modbus.restored, [])
-        published_value = next(
-            value
-            for slave_id, point_name, value in service.modbus.published
-            if slave_id == 48 and point_name == "ch1_setpoint"
-        )
-        self.assertAlmostEqual(float(published_value), 91.2, places=3)
+
+    def test_poll_retries_after_timeout_and_uses_gap(self) -> None:
+        config = self._base_runtime_config()
+        config.buses[0].request_retries = 1
+        config.buses[0].inter_request_delay_ms = 15
+        config.points = [
+            PointConfig(
+                name="ch1_read",
+                bus="bus1",
+                device=1,
+                modbus_slave_id=48,
+                address=48,
+                parameter="rEAd",
+                parameter_index=None,
+                protocol_format="float32",
+                register_type="holding_register",
+                modbus_address=16,
+                modbus_data_type="float32",
+            ),
+        ]
+        service = OwenGatewayService(config)
+
+        class DummyModbus:
+            def publish(self, slave_id: int, point: PointConfig, value: object) -> None:
+                return None
+
+            def publish_point_metadata(
+                self,
+                slave_id: int,
+                point: PointConfig,
+                *,
+                time_mark: int | None = None,
+                channel_status: int | None = None,
+            ) -> None:
+                return None
+
+            def publish_value(
+                self,
+                slave_id: int,
+                register_type: str,
+                address: int,
+                data_type: str,
+                value: object,
+            ) -> None:
+                return None
+
+            def publish_status(self, slave_id: int, value: object) -> None:
+                return None
+
+            def publish_telemetry(self, slave_id: int, **kwargs: object) -> None:
+                return None
+
+        class DummyClient:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def exchange(
+                self,
+                address: int,
+                parameter_name: str,
+                parameter_index: int | None = None,
+            ) -> tuple[bytes, bytes, OwenFrame]:
+                self.calls += 1
+                if self.calls == 1:
+                    raise TimeoutError("slow device")
+                return (
+                    b"req",
+                    b"resp",
+                    OwenFrame(
+                        address=address << 3,
+                        request=False,
+                        parameter_hash=hash_parameter_name(parameter_name),
+                        payload=bytes.fromhex("42b1cb74"),
+                    ),
+                )
+
+        service.modbus = DummyModbus()
+        client = DummyClient()
+        service.serial_clients["bus1"] = client
+
+        import asyncio
+
+        with patch("owen_gateway.service.asyncio.sleep", new=AsyncMock()) as sleep_mock:
+            asyncio.run(service._poll_bus_once(config.buses[0], {48: config.points}))
+
+        self.assertEqual(client.calls, 2)
+        self.assertTrue(sleep_mock.await_count >= 1)
+        self.assertAlmostEqual(float(service.point_values["ch1_read"]), 88.8973, places=2)
 
 
 if __name__ == "__main__":

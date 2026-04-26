@@ -200,13 +200,7 @@ class OwenGatewayService:
                     continue
                 frame = None
                 try:
-                    async with self.bus_locks[bus.name]:
-                        request, response, frame = await asyncio.to_thread(
-                            self.serial_clients[bus.name].exchange,
-                            point.address,
-                            point.parameter,
-                            point.parameter_index,
-                        )
+                    request, response, frame = await self._exchange_with_retries(bus, point)
                     if self.config.diagnostics:
                         self.logger.info(
                             "diag bus=%s slave=%s point=%s request=%s response=%s",
@@ -377,6 +371,8 @@ class OwenGatewayService:
                         point.address,
                         point.parameter,
                     )
+                if bus.inter_request_delay_ms > 0:
+                    await asyncio.sleep(bus.inter_request_delay_ms / 1000)
 
             self._publish_logic_unit_masks(bus.name, slave_id, points)
             if failures == 0:
@@ -637,6 +633,40 @@ class OwenGatewayService:
         if last_error is not None:
             raise last_error
         raise RuntimeError(f"write verification failed for {point.name}")
+
+    async def _exchange_with_retries(
+        self,
+        bus: BusConfig,
+        point: PointConfig,
+    ) -> tuple[bytes, bytes, object]:
+        attempts = bus.request_retries + 1
+        last_error: Exception | None = None
+        for attempt in range(1, attempts + 1):
+            try:
+                async with self.bus_locks[bus.name]:
+                    return await asyncio.to_thread(
+                        self.serial_clients[bus.name].exchange,
+                        point.address,
+                        point.parameter,
+                        point.parameter_index,
+                    )
+            except Exception as exc:
+                last_error = exc
+                if attempt >= attempts:
+                    raise
+                if self.config.diagnostics:
+                    self.logger.warning(
+                        "retrying bus=%s point=%s attempt=%s/%s after error=%r",
+                        bus.name,
+                        point.name,
+                        attempt,
+                        attempts,
+                        exc,
+                    )
+                if bus.inter_request_delay_ms > 0:
+                    await asyncio.sleep(bus.inter_request_delay_ms / 1000)
+        assert last_error is not None
+        raise last_error
 
 
 def _inc_counter(value: int) -> int:

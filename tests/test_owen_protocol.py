@@ -12,6 +12,8 @@ from owen_gateway.protocol import (
     encode_frame,
     hash_parameter_name,
 )
+from owen_gateway.serial_client import _normalize_frame_response
+from owen_gateway.serial_client import _read_oven_response
 
 
 class OwenProtocolTests(unittest.TestCase):
@@ -99,6 +101,68 @@ class OwenProtocolTests(unittest.TestCase):
 
     def test_encode_stored_dot_tolerates_float32_rounding_noise(self) -> None:
         self.assertEqual(encode_payload(1.100000023841858, "stored_dot"), bytes([0x1B]))
+
+    def test_normalize_frame_response_appends_missing_carriage_return(self) -> None:
+        raw = bytes.fromhex(
+            "23 4a 47 47 4d 4f 4e 4f 4b 4b 49 52 48 53 48 56 52 4e 55 55 56 53 4c 54"
+        )
+        normalized = _normalize_frame_response(raw)
+        self.assertTrue(normalized.endswith(b"\r"))
+
+    def test_read_oven_response_collects_fragmented_frame(self) -> None:
+        class FakeSerial:
+            def __init__(self) -> None:
+                self.timeout = 1.0
+                self._chunks = [
+                    b"#",
+                    b"JGGMONO",
+                    b"KKIRHSHV",
+                    b"RNUUVSLT\r",
+                ]
+
+            @property
+            def in_waiting(self) -> int:
+                if not self._chunks:
+                    return 0
+                return len(self._chunks[0])
+
+            def read(self, _size: int) -> bytes:
+                if not self._chunks:
+                    return b""
+                return self._chunks.pop(0)
+
+        serial_port = FakeSerial()
+
+        response = _read_oven_response(serial_port, 1.0)
+
+        self.assertEqual(
+            response,
+            bytes.fromhex(
+                "23 4a 47 47 4d 4f 4e 4f 4b 4b 49 52 48 53 48 56 52 4e 55 55 56 53 4c 54 0d"
+            ),
+        )
+        self.assertEqual(serial_port.timeout, 1.0)
+
+    def test_read_oven_response_accepts_short_write_ack(self) -> None:
+        class FakeSerial:
+            def __init__(self) -> None:
+                self.timeout = 1.0
+                self._chunks = [b"#", b"JGGH", b"\x16"]
+
+            @property
+            def in_waiting(self) -> int:
+                if not self._chunks:
+                    return 0
+                return len(self._chunks[0])
+
+            def read(self, _size: int) -> bytes:
+                if not self._chunks:
+                    return b""
+                return self._chunks.pop(0)
+
+        response = _read_oven_response(FakeSerial(), 1.0)
+
+        self.assertEqual(response, b"#JGGH\x16")
 
 
 if __name__ == "__main__":

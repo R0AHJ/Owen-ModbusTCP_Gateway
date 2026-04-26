@@ -57,6 +57,8 @@ class BusConfig:
     name: str
     serial: SerialConfig
     poll_interval_ms: int
+    request_retries: int = 0
+    inter_request_delay_ms: int = 0
     modbus_slave_base: int | None = None
 
 
@@ -153,6 +155,10 @@ def validate_config(config: OwenGatewayConfig) -> None:
         bus_names.add(bus.name)
         if bus.poll_interval_ms <= 0:
             raise ValueError(f"bus {bus.name}: poll_interval_ms must be > 0")
+        if bus.request_retries < 0:
+            raise ValueError(f"bus {bus.name}: request_retries must be >= 0")
+        if bus.inter_request_delay_ms < 0:
+            raise ValueError(f"bus {bus.name}: inter_request_delay_ms must be >= 0")
         if bus.modbus_slave_base is None:
             raise ValueError(f"bus {bus.name}: modbus_slave_base is not resolved")
         if not (2 <= bus.modbus_slave_base <= 247):
@@ -352,6 +358,8 @@ def _load_buses(payload: dict[str, object]) -> list[BusConfig]:
                 name=entry["name"],
                 serial=SerialConfig(**entry["serial"]),
                 poll_interval_ms=entry["poll_interval_ms"],
+                request_retries=entry.get("request_retries", 0),
+                inter_request_delay_ms=entry.get("inter_request_delay_ms", 0),
                 modbus_slave_base=entry.get("modbus_slave_base"),
             )
             for entry in raw_buses
@@ -362,6 +370,8 @@ def _load_buses(payload: dict[str, object]) -> list[BusConfig]:
             name="bus1",
             serial=SerialConfig(**payload["serial"]),
             poll_interval_ms=payload["poll_interval_ms"],
+            request_retries=payload.get("request_retries", 0),
+            inter_request_delay_ms=payload.get("inter_request_delay_ms", 0),
             modbus_slave_base=payload.get("modbus_slave_base"),
         )
     ]

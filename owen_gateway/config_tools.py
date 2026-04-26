@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import tempfile
 from pathlib import Path
@@ -25,6 +26,67 @@ TRM138_TIME_MARK_BASE = TRM138_REGISTER_BASE + (
 )
 TRM138_STATUS_BASE = TRM138_TIME_MARK_BASE + TRM138_CHANNEL_COUNT
 TRM138_SETPOINT_BASE = 56
+
+
+def list_serial_ports() -> list[dict[str, str]]:
+    entries: list[dict[str, str]] = []
+    seen_paths: set[str] = set()
+
+    by_id_dir = Path("/dev/serial/by-id")
+    if os.name != "nt" and by_id_dir.exists():
+        for entry in sorted(by_id_dir.iterdir(), key=lambda item: item.name):
+            path = str(entry)
+            target = ""
+            if entry.is_symlink():
+                try:
+                    target = str(entry.resolve(strict=True))
+                except OSError:
+                    target = str(entry.resolve(strict=False))
+            entries.append(
+                {
+                    "path": path,
+                    "target": target,
+                    "source": "by-id",
+                }
+            )
+            seen_paths.add(path)
+            if target:
+                seen_paths.add(target)
+
+    for port in sorted(_list_system_serial_ports(), key=lambda item: item.device):
+        if port.device in seen_paths:
+            continue
+        description = port.description or ""
+        hwid = port.hwid or ""
+        target = ", ".join(part for part in [description, hwid] if part)
+        entries.append(
+            {
+                "path": port.device,
+                "target": target,
+                "source": "system",
+            }
+        )
+        seen_paths.add(port.device)
+    return entries
+
+
+def render_serial_ports() -> str:
+    ports = list_serial_ports()
+    if not ports:
+        return "No serial ports detected."
+    lines = ["Available serial ports:"]
+    for entry in ports:
+        suffix = f" -> {entry['target']}" if entry["target"] else ""
+        lines.append(f"- {entry['path']}{suffix}")
+    return "\n".join(lines)
+
+
+def _list_system_serial_ports() -> list[object]:
+    try:
+        from serial.tools import list_ports
+    except ImportError:
+        return []
+    return list(list_ports.comports())
 
 
 def load_config_document(path: str | Path) -> dict[str, object]:
@@ -73,7 +135,7 @@ def render_config_summary(payload: dict[str, object]) -> str:
     for bus in resolved.buses:
         lines.append(
             f"{bus.name}: {bus.serial.port} {bus.serial.baudrate} {bus.serial.bytesize}{bus.serial.parity}{bus.serial.stopbits}, "
-            f"poll={bus.poll_interval_ms}ms"
+            f"poll={bus.poll_interval_ms}ms retries={bus.request_retries} gap={bus.inter_request_delay_ms}ms"
         )
         for device in devices.get(bus.name, []):
             lines.append(
@@ -261,6 +323,8 @@ def set_line(
     timeout_ms: int,
     poll_interval_ms: int,
     address_bits: int = 8,
+    request_retries: int = 0,
+    inter_request_delay_ms: int = 0,
     modbus_slave_base: int | None = None,
 ) -> dict[str, object]:
     buses = _get_buses(payload)
@@ -284,6 +348,8 @@ def set_line(
             "address_bits": address_bits,
         },
         "poll_interval_ms": poll_interval_ms,
+        "request_retries": request_retries,
+        "inter_request_delay_ms": inter_request_delay_ms,
     }
 
     for index, bus in enumerate(buses):

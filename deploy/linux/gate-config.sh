@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR="@APP_DIR@"
+CONFIG_PATH="@CONFIG_DIR@/owen_config.json"
+
+if [[ ! -x "${APP_DIR}/.venv/bin/python" ]]; then
+  echo "python venv not found: ${APP_DIR}/.venv/bin/python" >&2
+  exit 1
+fi
+
+if [[ ! -f "${CONFIG_PATH}" ]]; then
+  echo "config not found: ${CONFIG_PATH}" >&2
+  exit 1
+fi
+
+export PYTHONPATH="${APP_DIR}"
+if [[ $# -eq 0 ]]; then
+  exec "${APP_DIR}/.venv/bin/python" -m owen_gateway config -h
+fi
+
+command_name="$1"
+shift
+
+if [[ "${command_name}" == "list-serial" ]]; then
+  exec "${APP_DIR}/.venv/bin/python" -m owen_gateway config "${command_name}" "$@"
+fi
+
+exec "${APP_DIR}/.venv/bin/python" -m owen_gateway config "${command_name}" --config "${CONFIG_PATH}" "$@"

@@ -1,0 +1,6 @@
+alias gate-config='/usr/local/bin/gate-config.sh'
+alias gate-menu='/usr/local/bin/gate-menu.sh'
+alias gate-status='/usr/local/bin/gate-status.sh'
+alias gate-logs='journalctl -u owen-gateway -f'
+alias gate-restart='systemctl restart owen-gateway'
+alias gate-service='systemctl status owen-gateway --no-pager -l'
